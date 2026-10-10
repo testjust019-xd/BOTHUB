@@ -1,0 +1,201 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>self-flag · pairing</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh;
+    background: #0b0c0f; color: #e7e7ea;
+    font: 15px/1.5 ui-sans-serif, system-ui, sans-serif;
+    display: flex; align-items: center; justify-content: center;
+    padding: 24px;
+  }
+  main { width: 100%; max-width: 420px; }
+  h1 { font-size: 26px; margin: 0 0 24px; letter-spacing: -0.01em; }
+  h1 .dim { color: #6b6f76; font-weight: 400; }
+  form { display: grid; gap: 14px; margin-bottom: 24px; }
+  label { display: grid; gap: 6px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b8f96; }
+  input, select {
+    background: #14161a; color: #e7e7ea;
+    border: 1px solid #262a30; border-radius: 8px;
+    padding: 12px 14px; font-size: 15px; font-family: inherit;
+    outline: none; transition: border-color .15s;
+  }
+  input:focus, select:focus { border-color: #3b82f6; }
+  button {
+    background: #3b82f6; color: white; border: 0; border-radius: 8px;
+    padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer;
+    transition: background .15s, transform .05s;
+  }
+  button:hover:not(:disabled) { background: #2f6fd4; }
+  button:active:not(:disabled) { transform: scale(0.99); }
+  button:disabled { opacity: .6; cursor: wait; }
+
+  .code-block { background: #14161a; border: 1px solid #262a30; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .code-block .label { font-size: 11px; letter-spacing: 0.22em; color: #6b6f76; margin-bottom: 10px; }
+  .code-wrap { display: flex; align-items: center; gap: 12px; }
+  .code {
+    font-family: ui-monospace, monospace;
+    font-size: 30px; letter-spacing: 0.14em;
+    cursor: pointer; user-select: all;
+    padding: 4px 6px; margin: -4px -6px;
+    border-radius: 6px;
+    transition: background .12s, color .12s;
+    flex: 1;
+  }
+  .code:hover { background: #1d2126; }
+  .code:active { background: #262a30; }
+  .copy-btn {
+    background: transparent; color: #8b8f96;
+    border: 1px solid #262a30; border-radius: 8px;
+    padding: 8px 12px; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; font-family: inherit;
+    transition: all .15s;
+  }
+  .copy-btn:hover { color: #e7e7ea; border-color: #3b82f6; }
+  .copy-btn.copied { color: #34d399; border-color: #34d399; }
+  .code-block p { color: #8b8f96; font-size: 13px; margin: 12px 0 0; }
+
+  .status { font-family: ui-monospace, monospace; font-size: 12px; color: #8b8f96; white-space: pre-wrap; }
+  .status .ok { color: #34d399; }
+  .status .warn { color: #fbbf24; }
+  .status .bad { color: #f87171; }
+</style>
+</head>
+<body>
+<main>
+  <h1>self-flag <span class="dim">· pairing</span></h1>
+
+  <form id="form">
+    <label>phone
+      <input id="phone" placeholder="225..." autocomplete="off" required>
+    </label>
+    <label>level
+      <select id="level">
+        <option value="1">1 — text flood</option>
+        <option value="2">2 — text flood (higher)</option>
+        <option value="3">3 — flood + stickers</option>
+        <option value="4">4 — flood + stickers + big bodies</option>
+      </select>
+    </label>
+    <button id="btn" type="submit">get pairing code</button>
+  </form>
+
+  <div class="code-block" id="codeBlock" hidden>
+    <div class="label">pairing code</div>
+    <div class="code-wrap">
+      <div class="code" id="code" title="click to copy">————</div>
+      <button type="button" class="copy-btn" id="copyBtn">copy</button>
+    </div>
+    <p>WhatsApp → Linked Devices → Link with phone number</p>
+  </div>
+
+  <div class="status" id="status">idle</div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  let poll = null;
+
+  async function copyCode() {
+    const text = $('code').textContent.trim();
+    if (!text || text.includes('—')) return;
+    let ok = false;
+    try {
+      await navigator.clipboard.writeText(text);
+      ok = true;
+    } catch {
+      // fallback for non-secure contexts or older browsers
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { ok = document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta);
+    }
+    if (!ok) return;
+    const btn = $('copyBtn');
+    btn.textContent = 'copied ✓';
+    btn.classList.add('copied');
+    setTimeout(() => {
+      btn.textContent = 'copy';
+      btn.classList.remove('copied');
+    }, 1600);
+  }
+
+  $('code').addEventListener('click', copyCode);
+  $('copyBtn').addEventListener('click', copyCode);
+
+  async function start(e) {
+    e.preventDefault();
+    const phone = $('phone').value.replace(/\D/g, '');
+    const level = parseInt($('level').value, 10);
+    if (!phone) return;
+
+    $('btn').disabled = true;
+    $('status').textContent = 'requesting code...';
+
+    // reset copy button in case a previous code was copied
+    $('copyBtn').textContent = 'copy';
+    $('copyBtn').classList.remove('copied');
+
+    try {
+      const r = await fetch('/api/pair/start', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ phone, level }),
+      });
+      const d = await r.json();
+      if (!r.ok) throw new Error(d.error || 'failed');
+
+      if (d.code) {
+        $('codeBlock').hidden = false;
+        $('code').textContent = d.code;
+      } else {
+        $('codeBlock').hidden = true;
+        $('status').innerHTML = '<span class="ok">session already registered — running</span>';
+      }
+
+      beginPoll(phone);
+    } catch (err) {
+      $('status').innerHTML = `<span class="bad">${err.message}</span>`;
+      $('btn').disabled = false;
+    }
+  }
+
+  function beginPoll(phone) {
+    if (poll) clearInterval(poll);
+    const t0 = Date.now();
+    poll = setInterval(async () => {
+      try {
+        const r = await fetch('/api/pair/status?phone=' + encodeURIComponent(phone));
+        const s = await r.json();
+        const age = ((Date.now() - t0) / 1000).toFixed(0);
+        if (s.status === 'connected') {
+          const secs = s.startedAt ? ((Date.now() - s.startedAt) / 1000).toFixed(0) : '0';
+          $('status').innerHTML =
+            `<span class="ok">connected · level running · sent ${s.sends} in ${secs}s</span>`;
+        } else if (s.status === 'banned') {
+          $('status').innerHTML = `<span class="bad">*** BANNED at ${s.bannedAt} ***</span>`;
+          clearInterval(poll);
+          $('btn').disabled = false;
+        } else if (s.status === 'pending') {
+          $('status').textContent = `waiting for login · ${age}s`;
+        } else {
+          $('status').textContent = `status: ${s.status}`;
+        }
+      } catch {}
+    }, 2000);
+  }
+
+  $('form').addEventListener('submit', start);
+</script>
+</body>
+</html>
