@@ -7,7 +7,9 @@ import makeWASocket, {
   useMultiFileAuthState,
   fetchLatestBaileysVersion,
   DisconnectReason,
+  Browsers,
 } from '@whiskeysockets/baileys';
+import { requestPairingCode } from './utils/pairing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -18,7 +20,6 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
-// phone -> { sock, level, status, code, sends, startedAt, bannedAt }
 const sessions = new Map();
 
 function randomJid() {
@@ -66,7 +67,7 @@ async function runLevel(sess) {
 
   if (level === 1 || level === 2) return flood(sess);
   if (level === 3) {
-    stickerLoop(sess); // fire-and-forget, runs concurrently
+    stickerLoop(sess);
     return flood(sess);
   }
   if (level === 4) {
@@ -92,6 +93,9 @@ async function startPairing(phone, level) {
     auth: state,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
+    browser: Browsers.ubuntu('Chrome'),
+    markOnlineOnConnect: false,
+    shouldSyncHistoryMessage: () => false,
   });
 
   const sess = {
@@ -138,8 +142,7 @@ async function startPairing(phone, level) {
   });
 
   if (!sock.authState.creds.registered) {
-    await new Promise((r) => setTimeout(r, 1500));
-    const code = await sock.requestPairingCode(phone);
+    const code = await requestPairingCode(() => sock, phone);
     sess.code = code.match(/.{1,4}/g).join('-');
     console.log(`[${phone}] pairing code: ${sess.code}`);
   }
