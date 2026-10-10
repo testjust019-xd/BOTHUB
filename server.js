@@ -1,3 +1,8 @@
+// BOTHUB — pairing site + level runner.
+// The pairing code is requested on the 'qr' event: that's the exact moment
+// Baileys signals it's ready to receive a login. A fixed timer — or
+// waitForSocketOpen — fires too early and yields a code WhatsApp rejects.
+
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -9,7 +14,6 @@ import makeWASocket, {
   DisconnectReason,
   Browsers,
 } from '@whiskeysockets/baileys';
-import { requestPairingCode } from './utils/pairing.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
@@ -20,6 +24,7 @@ const app = express();
 app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
+// phone -> { sock, level, status, code, sends, startedAt, bannedAt }
 const sessions = new Map();
 
 function randomJid() {
@@ -86,15 +91,22 @@ async function startPairing(phone, level) {
 
   fs.mkdirSync(path.join(AUTH_DIR, phone), { recursive: true });
   const { state, saveCreds } = await useMultiFileAuthState(path.join(AUTH_DIR, phone));
-  const { version } = await fetchLatestBaileysVersion();
+
+  let version;
+  try {
+    ({ version } = await fetchLatestBaileysVersion());
+  } catch {
+    version = undefined; // Baileys utilisera sa version par défaut
+  }
 
   const sock = makeWASocket({
-    version,
+    ...(version ? { version } : {}),
     auth: state,
     logger: pino({ level: 'silent' }),
     printQRInTerminal: false,
     browser: Browsers.ubuntu('Chrome'),
     markOnlineOnConnect: false,
+    syncFullHistory: false,
     shouldSyncHistoryMessage: () => false,
   });
 
@@ -110,24 +122,53 @@ async function startPairing(phone, level) {
 
   sock.ev.on('creds.update', saveCreds);
 
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect }) => {
+  // The code is resolved once, on the 'qr' event.
+  let resolveCode, rejectCode;
+  const codePromise = new Promise((resolve, reject) => {
+    resolveCode = resolve;
+    rejectCode = reject;
+  });
+
+  let pairingRequested = false;
+
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+    // Request the code the exact moment 'qr' fires and we're not yet registered.
+    if (qr && !pairingRequested && !sock.authState.creds.registered) {
+      pairingRequested = true;
+      try {
+        const raw = await sock.requestPairingCode(phone);
+        const code = raw?.match(/.{1,4}/g)?.join('-') || raw;
+        sess.code = code;
+        resolveCode(code);
+        console.log(`[${phone}] pairing code: ${code}`);
+      } catch (err) {
+        rejectCode(err);
+        console.error(`[${phone}] pairing failed:`, err?.message || err);
+      }
+    }
+
     if (connection === 'open') {
       sess.status = 'connected';
       console.log(`[${phone}] connected as ${sock.user?.id}`);
       runLevel(sess);
     }
+
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       const ts = new Date().toISOString();
       fs.mkdirSync(path.join(__dirname, 'logs'), { recursive: true });
-      fs.appendFileSync(path.join(__dirname, 'logs', 'session.log'),
-        `[${ts}] ${phone} close code=${code}\n`);
+      fs.appendFileSync(
+        path.join(__dirname, 'logs', 'session.log'),
+        `[${ts}] ${phone} close code=${code}\n`
+      );
 
       if (code === 401 || code === 403) {
         sess.status = 'banned';
         sess.bannedAt = ts;
-        fs.appendFileSync(path.join(__dirname, 'logs', 'session.log'),
-          `[${ts}] ${phone} *** BANNED ***\n`);
+        fs.appendFileSync(
+          path.join(__dirname, 'logs', 'session.log'),
+          `[${ts}] ${phone} *** BANNED ***\n`
+        );
         console.log(`[${phone}] *** BANNED at ${ts} ***`);
         return;
       }
@@ -142,12 +183,16 @@ async function startPairing(phone, level) {
   });
 
   if (!sock.authState.creds.registered) {
-    const code = await requestPairingCode(() => sock, phone);
-    sess.code = code.match(/.{1,4}/g).join('-');
-    console.log(`[${phone}] pairing code: ${sess.code}`);
+    // 25-second ceiling so the HTTP request can't hang forever if 'qr'
+    // never arrives (unreachable WhatsApp, bad network, etc).
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('pairing timeout — no qr event in 25s')), 25000)
+    );
+    const code = await Promise.race([codePromise, timeout]);
+    return { code };
   }
 
-  return { code: sess.code };
+  return { code: null, alreadyRegistered: true };
 }
 
 app.post('/api/pair/start', async (req, res) => {
@@ -156,8 +201,8 @@ app.post('/api/pair/start', async (req, res) => {
   if (!phone) return res.status(400).json({ error: 'phone required' });
   if (![1, 2, 3, 4].includes(level)) return res.status(400).json({ error: 'level 1-4 required' });
   try {
-    const { code } = await startPairing(phone, level);
-    res.json({ phone, level, code: code || null, alreadyRegistered: !code });
+    const { code, alreadyRegistered } = await startPairing(phone, level);
+    res.json({ phone, level, code: code || null, alreadyRegistered: !!alreadyRegistered });
   } catch (err) {
     console.error('[pair/start]', err?.message || err);
     res.status(500).json({ error: err?.message || 'pairing failed' });
@@ -177,5 +222,5 @@ app.get('/api/pair/status', (req, res) => {
 });
 
 app.listen(PORT, () => {
-  console.log(`[self-flag] http://localhost:${PORT}`);
+  console.log(`[bothub] http://localhost:${PORT}`);
 });
