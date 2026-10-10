@@ -22,7 +22,7 @@ Il rassemble plus de 700 commandes destinées au divertissement, aux utilitaires
 
 <br/>
 
-<a href="https://bothub.onrender.com">
+<a href="https://bothub-1vmg.onrender.com">
 <img src="https://img.shields.io/badge/📱_ACCÉDER_AU_PAIRING-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Accéder au pairing"/>
 </a>
 
@@ -108,7 +108,7 @@ BOTHUB est hébergé sur Render.
 
 <div align="center">
 
-<a href="https://bothub.onrender.com">
+<a href="https://bothub-1vmg.onrender.com">
 <img src="https://img.shields.io/badge/OBTENIR_MON_CODE_DE_PAIRING-25D366?style=for-the-badge&logo=whatsapp&logoColor=white" alt="Obtenir mon code de pairing"/>
 </a>
 
@@ -148,7 +148,7 @@ La liste complète pourra être ajoutée ici ultérieurement.
 
 BOTHUB est hébergé sur **Render**.
 
-🌐 Adresse du service : https://bothub.onrender.com
+🌐 Adresse du service : https://bothub-1vmg.onrender.com
 
 Le bon fonctionnement du bot dépend de sa configuration, de la persistance de sa session WhatsApp et des paramètres de son hébergement.
 
