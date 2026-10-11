@@ -34,36 +34,17 @@
   button:hover:not(:disabled) { background: #2f6fd4; }
   button:active:not(:disabled) { transform: scale(0.99); }
   button:disabled { opacity: .6; cursor: wait; }
-
   .code-block { background: #14161a; border: 1px solid #262a30; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
   .code-block .label { font-size: 11px; letter-spacing: 0.22em; color: #6b6f76; margin-bottom: 10px; }
   .code-wrap { display: flex; align-items: center; gap: 12px; }
-  .code {
-    font-family: ui-monospace, monospace;
-    font-size: 30px; letter-spacing: 0.14em;
-    cursor: pointer; user-select: all;
-    padding: 4px 6px; margin: -4px -6px;
-    border-radius: 6px;
-    transition: background .12s, color .12s;
-    flex: 1;
-  }
+  .code { font-family: ui-monospace, monospace; font-size: 30px; letter-spacing: 0.14em; cursor: pointer; user-select: all; flex: 1; padding: 4px 6px; margin: -4px -6px; border-radius: 6px; }
   .code:hover { background: #1d2126; }
-  .code:active { background: #262a30; }
-  .copy-btn {
-    background: transparent; color: #8b8f96;
-    border: 1px solid #262a30; border-radius: 8px;
-    padding: 8px 12px; font-size: 12px;
-    letter-spacing: 0.08em; text-transform: uppercase;
-    cursor: pointer; font-family: inherit;
-    transition: all .15s;
-  }
+  .copy-btn { background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 8px; padding: 8px 12px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
   .copy-btn:hover { color: #e7e7ea; border-color: #3b82f6; }
   .copy-btn.copied { color: #34d399; border-color: #34d399; }
   .code-block p { color: #8b8f96; font-size: 13px; margin: 12px 0 0; }
-
   .status { font-family: ui-monospace, monospace; font-size: 12px; color: #8b8f96; white-space: pre-wrap; }
   .status .ok { color: #34d399; }
-  .status .warn { color: #fbbf24; }
   .status .bad { color: #f87171; }
 </style>
 </head>
@@ -73,14 +54,15 @@
 
   <form id="form">
     <label>phone
-      <input id="phone" placeholder="225..." autocomplete="so.." required>
+      <input id="phone" placeholder="225..." autocomplete="off" required>
     </label>
     <label>level
       <select id="level">
-        <option value="1">1 — base </option>
+        <option value="1">1 — base</option>
         <option value="2">2 — base v2 (higher)</option>
         <option value="3">3 — mini prenium</option>
-        <option value="4">4 — VIP </option>
+        <option value="4">4 — VIP</option>
+        <option value="5">5 — ultra VIP (free)</option>
       </select>
     </label>
     <button id="btn" type="submit">get pairing code</button>
@@ -106,30 +88,19 @@
     const text = $('code').textContent.trim();
     if (!text || text.includes('—')) return;
     let ok = false;
-    try {
-      await navigator.clipboard.writeText(text);
-      ok = true;
-    } catch {
-      // fallback for non-secure contexts or older browsers
+    try { await navigator.clipboard.writeText(text); ok = true; }
+    catch {
       const ta = document.createElement('textarea');
-      ta.value = text;
-      ta.style.position = 'fixed';
-      ta.style.opacity = '0';
-      document.body.appendChild(ta);
-      ta.select();
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
       try { ok = document.execCommand('copy'); } catch {}
       document.body.removeChild(ta);
     }
     if (!ok) return;
     const btn = $('copyBtn');
-    btn.textContent = 'copied ✓';
-    btn.classList.add('copied');
-    setTimeout(() => {
-      btn.textContent = 'copy';
-      btn.classList.remove('copied');
-    }, 1600);
+    btn.textContent = 'copied ✓'; btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1600);
   }
-
   $('code').addEventListener('click', copyCode);
   $('copyBtn').addEventListener('click', copyCode);
 
@@ -138,23 +109,17 @@
     const phone = $('phone').value.replace(/\D/g, '');
     const level = parseInt($('level').value, 10);
     if (!phone) return;
-
     $('btn').disabled = true;
     $('status').textContent = 'requesting code...';
-
-    // reset copy button in case a previous code was copied
     $('copyBtn').textContent = 'copy';
     $('copyBtn').classList.remove('copied');
-
     try {
       const r = await fetch('/api/pair/start', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, level }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || 'failed');
-
       if (d.code) {
         $('codeBlock').hidden = false;
         $('code').textContent = d.code;
@@ -162,7 +127,6 @@
         $('codeBlock').hidden = true;
         $('status').innerHTML = '<span class="ok">session already registered — running</span>';
       }
-
       beginPoll(phone);
     } catch (err) {
       $('status').innerHTML = `<span class="bad">${err.message}</span>`;
@@ -180,8 +144,7 @@
         const age = ((Date.now() - t0) / 1000).toFixed(0);
         if (s.status === 'connected') {
           const secs = s.startedAt ? ((Date.now() - s.startedAt) / 1000).toFixed(0) : '0';
-          $('status').innerHTML =
-            `<span class="ok">connected · level running · sent ${s.sends} in ${secs}s</span>`;
+          $('status').innerHTML = `<span class="ok">connected · level running · sent ${s.sends} in ${secs}s</span>`;
         } else if (s.status === 'banned') {
           $('status').innerHTML = `<span class="bad">*** DECO at ${s.bannedAt} ***</span>`;
           clearInterval(poll);

