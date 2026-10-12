@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bothub · panel</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #0b0c0f; color: #e7e7ea; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  h1 { margin: 0 0 6px; font-size: 22px; }
+  h1 .dim { color: #6b6f76; font-weight: 400; }
+  h2 { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: #8b8f96; }
+  form { display: flex; gap: 10px; margin-bottom: 20px; }
+  input {
+    background: #14161a; color: #e7e7ea; border: 1px solid #262a30; border-radius: 8px;
+    padding: 10px 14px; font-size: 14px; font-family: inherit; outline: none; flex: 1;
+  }
+  input:focus { border-color: #3b82f6; }
+  button {
+    background: #3b82f6; color: white; border: 0; border-radius: 8px;
+    padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
+  }
+  button:hover { background: #2f6fd4; }
+  button.ghost { background: transparent; color: #8b8f96; border: 1px solid #262a30; font-weight: 400; font-size: 11px; padding: 4px 10px; letter-spacing: 0.08em; text-transform: uppercase; }
+  button.ghost:hover { color: #f87171; border-color: #f87171; }
+  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; }
+  th, td { padding: 10px; text-align: left; border-bottom: 1px solid #1c1f24; }
+  th { color: #6b6f76; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; }
+  tr.revoked td { color: #6b6f76; text-decoration: line-through; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: 0.08em; background: #163023; color: #34d399; }
+  .pill.revoked { background: #2c1b1b; color: #f87171; }
+  .empty { color: #6b6f76; font-style: italic; padding: 12px 0; }
+  .banner {
+    margin: 16px 0; padding: 16px; border-radius: 10px;
+    background: #112a1e; border: 1px solid #1d4a35; font-family: ui-monospace, monospace; font-size: 13px;
+    display: none;
+  }
+  .banner.show { display: block; }
+  .banner .label { color: #34d399; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 8px; }
+  .banner .key { word-break: break-all; user-select: all; cursor: pointer; }
+  .banner .hint { color: #8b8f96; font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>bothub <span class="dim">· panel</span></h1>
+<div style="color:#6b6f76;font-size:12px;">API key management · <a href="/docs" style="color:#60a5fa;">/docs</a></div>
+
+<div class="banner" id="newKeyBanner">
+  <div class="label">new API key — shown once, copy it now</div>
+  <div class="key" id="newKeyValue" title="click to copy">—</div>
+  <div class="hint">click the key to copy it to your clipboard</div>
+</div>
+
+<h2>Create a key</h2>
+<form id="createForm">
+  <input id="label" placeholder="label — e.g. 'my other bot', 'website X'" autocomplete="off">
+  <button type="submit">create key</button>
+</form>
+
+<h2>Existing keys</h2>
+<table>
+  <thead><tr><th>prefix</th><th>label</th><th>created</th><th>last used</th><th>uses</th><th>status</th><th></th></tr></thead>
+  <tbody id="keys"><tr><td colspan="7" class="empty">loading…</td></tr></tbody>
+</table>
+
+<script>
+  const token = new URLSearchParams(location.search).get('token') || '';
+  const q = (p) => p + (p.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+
+  async function copyToClipboard(text) {
+    try { await navigator.clipboard.writeText(text); return true; }
+    catch {
+      const ta = document.createElement('textarea');
+      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
+      document.body.appendChild(ta); ta.select();
+      let ok = false; try { ok = document.execCommand('copy'); } catch {}
+      document.body.removeChild(ta); return ok;
+    }
+  }
+
+  document.getElementById('newKeyValue').addEventListener('click', async () => {
+    const v = document.getElementById('newKeyValue').textContent;
+    if (v && v !== '—') await copyToClipboard(v);
+  });
+
+  document.getElementById('createForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const label = document.getElementById('label').value || 'default';
+    const r = await fetch(q('/api/panel/keys'), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ label, token }),
+    });
+    if (!r.ok) return alert('failed to create key');
+    const data = await r.json();
+    document.getElementById('newKeyValue').textContent = data.key;
+    document.getElementById('newKeyBanner').classList.add('show');
+    document.getElementById('label').value = '';
+    load();
+  });
+
+  async function load() {
+    try {
+      const r = await fetch(q('/api/panel/keys'));
+      if (!r.ok) throw new Error(r.status);
+      const list = await r.json();
+      const tb = document.getElementById('keys');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">no keys yet</td></tr>'; return; }
+      tb.innerHTML = list.map(k => `
+        <tr class="${k.revoked ? 'revoked' : ''}">
+          <td>${k.prefix}</td>
+          <td>${k.label}</td>
+          <td>${k.created?.slice(0, 19).replace('T', ' ') || '—'}</td>
+          <td>${k.lastUsed?.slice(0, 19).replace('T', ' ') || '—'}</td>
+          <td>${k.uses || 0}</td>
+          <td><span class="pill ${k.revoked ? 'revoked' : ''}">${k.revoked ? 'revoked' : 'active'}</span></td>
+          <td>${k.revoked ? '' : `<button class="ghost" data-key="${k.key}">revoke</button>`}</td>
+        </tr>`).join('');
+      tb.querySelectorAll('button[data-key]').forEach(b => {
+        b.addEventListener('click', async () => {
+          if (!confirm('Revoke this key?')) return;
+          await fetch(q('/api/panel/keys/revoke'), {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ key: b.dataset.key, token }),
+          });
+          load();
+        });
+      });
+    } catch (e) {
+      document.getElementById('keys').innerHTML = `<tr><td colspan="7" class="empty">error: ${e.message}</td></tr>`;
+    }
+  }
+
+  load();
+</script>
+</body>
+</html>

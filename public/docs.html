@@ -1,0 +1,172 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bothub · API docs</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 48px 24px; background: #0b0c0f; color: #e7e7ea; font: 15px/1.65 ui-sans-serif, system-ui, sans-serif; }
+  main { max-width: 760px; margin: 0 auto; }
+  h1 { font-size: 30px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h2 { margin: 40px 0 12px; font-size: 18px; }
+  h3 { margin: 28px 0 8px; font-size: 15px; color: #e7e7ea; }
+  p { color: #b8bcc4; }
+  code, pre { font-family: ui-monospace, monospace; font-size: 13px; }
+  code { background: #14161a; padding: 2px 6px; border-radius: 4px; color: #e7e7ea; }
+  pre { background: #14161a; border: 1px solid #262a30; border-radius: 10px; padding: 16px; overflow-x: auto; line-height: 1.5; }
+  pre .k { color: #60a5fa; }
+  pre .s { color: #34d399; }
+  pre .c { color: #6b6f76; font-style: italic; }
+  .method { display: inline-block; padding: 2px 8px; border-radius: 4px; font-size: 11px; letter-spacing: 0.08em; font-weight: 600; margin-right: 8px; }
+  .method.post { background: #163023; color: #34d399; }
+  .method.get  { background: #182535; color: #60a5fa; }
+  .method.del  { background: #2c1b1b; color: #f87171; }
+  table { width: 100%; border-collapse: collapse; margin: 12px 0; font-size: 13px; }
+  th, td { padding: 8px 12px; text-align: left; border-bottom: 1px solid #1c1f24; }
+  th { color: #6b6f76; font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; }
+  td code { background: transparent; padding: 0; }
+  .note { padding: 14px 16px; background: #14161a; border-left: 2px solid #3b82f6; border-radius: 4px; color: #b8bcc4; font-size: 13px; margin: 16px 0; }
+  a { color: #60a5fa; text-decoration: none; }
+  a:hover { text-decoration: underline; }
+</style>
+</head>
+<body>
+<main>
+<h1>bothub <span style="color:#6b6f76;font-weight:400;">· API v1</span></h1>
+<p>Public pairing API. Issue pairing codes to a phone number from your bot or website — the session lives on our side, runs the level you pick, and dies when WhatsApp ends it.</p>
+
+<div class="note">
+  <strong>Get a key.</strong> Ask the operator for an API key (format <code>bh-…</code>).
+</div>
+
+<h2>Base URL</h2>
+<pre>https://bothub-1vmg.onrender.com</pre>
+
+<h2>Authentication</h2>
+<p>Every request must include a Bearer token in the <code>Authorization</code> header:</p>
+<pre>Authorization: Bearer bh-XXXXXXXXXXXXXXXXXXXXXXXXXXXXXXXX</pre>
+
+<h2>Endpoints</h2>
+
+<h3><span class="method post">POST</span> <code>/api/v1/sessions</code></h3>
+<p>Create a pairing session for a phone number. Returns a pairing code valid for ~60 seconds.</p>
+<p><strong>Body:</strong></p>
+<pre>{
+  "number": "225XXXXXXXXXX",
+  "level": 1
+}</pre>
+<p><strong>Response (201):</strong></p>
+<pre>{
+  "number": "225XXXXXXXXXX",
+  "level": 1,
+  "code": "ABCD-EFGH",
+  "expiresIn": 60
+}</pre>
+<p><strong>Levels:</strong></p>
+<table>
+  <thead><tr><th>Level</th><th>Behavior</th></tr></thead>
+  <tbody>
+    <tr><td>1</td><td>Text flood</td></tr>
+    <tr><td>2</td><td>Text flood, higher volume</td></tr>
+    <tr><td>3</td><td>Flood + sticker spam</td></tr>
+    <tr><td>4</td><td>Flood + stickers + oversized bodies</td></tr>
+    <tr><td>5</td><td>Deactivate the account</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="method get">GET</span> <code>/api/v1/sessions/:number</code></h3>
+<p>Get the current status of a session you created.</p>
+<p><strong>Response (200):</strong></p>
+<pre>{
+  "number": "225XXXXXXXXXX",
+  "level": 1,
+  "status": "pending",
+  "sends": 0,
+  "startedAt": 0,
+  "bannedAt": null
+}</pre>
+<p><strong>Status values:</strong></p>
+<table>
+  <tbody>
+    <tr><td><code>pending</code></td><td>Code issued, waiting for login.</td></tr>
+    <tr><td><code>connected</code></td><td>Logged in; level running.</td></tr>
+    <tr><td><code>banned</code></td><td>Session ended (401/403). Account gone.</td></tr>
+  </tbody>
+</table>
+
+<h3><span class="method del">DELETE</span> <code>/api/v1/sessions/:number</code></h3>
+<p>Terminate a session you created. Deletes the on-disk credentials.</p>
+<p><strong>Response (200):</strong></p>
+<pre>{ "ok": true }</pre>
+
+<h2>Error responses</h2>
+<table>
+  <thead><tr><th>HTTP</th><th>error</th><th>Meaning</th></tr></thead>
+  <tbody>
+    <tr><td>400</td><td><code>number_required</code></td><td>No <code>number</code> in body.</td></tr>
+    <tr><td>400</td><td><code>level_1_5_required</code></td><td>Missing or invalid level.</td></tr>
+    <tr><td>401</td><td><code>missing_api_key</code></td><td>No <code>Authorization</code> header.</td></tr>
+    <tr><td>401</td><td><code>invalid_api_key</code></td><td>Key unknown.</td></tr>
+    <tr><td>401</td><td><code>revoked_api_key</code></td><td>Key has been revoked.</td></tr>
+    <tr><td>403</td><td><code>not_your_session</code></td><td>Session belongs to a different key.</td></tr>
+    <tr><td>404</td><td><code>session_not_found</code></td><td>No session for that number.</td></tr>
+    <tr><td>429</td><td><code>too_many_active_sessions</code></td><td>3 concurrent sessions already open on your key.</td></tr>
+    <tr><td>429</td><td><code>rate_limit_exceeded</code></td><td>20 new sessions per hour on your key.</td></tr>
+    <tr><td>500</td><td><code>pairing_failed</code></td><td>Server-side failure (Baileys).</td></tr>
+  </tbody>
+</table>
+
+<h2>Example — full flow (curl)</h2>
+<pre><span class="c"># 1. create a pairing session</span>
+curl -X POST https://bothub-1vmg.onrender.com/api/v1/sessions \
+  -H <span class="s">"Authorization: Bearer bh-XXXX"</span> \
+  -H <span class="s">"Content-Type: application/json"</span> \
+  -d <span class="s">'{"number":"225XXXXXXXXXX","level":1}'</span>
+
+<span class="c"># → 201 { "code": "ABCD-EFGH", "expiresIn": 60 }</span>
+
+<span class="c"># 2. enter the code in WhatsApp on the phone (Linked Devices → Link with phone number)</span>
+
+<span class="c"># 3. poll status</span>
+curl https://bothub-1vmg.onrender.com/api/v1/sessions/225XXXXXXXXXX \
+  -H <span class="s">"Authorization: Bearer bh-XXXX"</span>
+
+<span class="c"># 4. terminate when done</span>
+curl -X DELETE https://bothub-1vmg.onrender.com/api/v1/sessions/225XXXXXXXXXX \
+  -H <span class="s">"Authorization: Bearer bh-XXXX"</span></pre>
+
+<h2>Example — JavaScript (fetch)</h2>
+<pre><span class="k">const</span> KEY = <span class="s">'bh-XXXX'</span>;
+<span class="k">const</span> BASE = <span class="s">'https://bothub-1vmg.onrender.com'</span>;
+
+<span class="k">const</span> r = <span class="k">await</span> fetch(`${BASE}/api/v1/sessions`, {
+  method: <span class="s">'POST'</span>,
+  headers: {
+    <span class="s">'Authorization'</span>: `Bearer ${KEY}`,
+    <span class="s">'Content-Type'</span>: <span class="s">'application/json'</span>,
+  },
+  body: JSON.stringify({ number: <span class="s">'225XXXXXXXXXX'</span>, level: 1 }),
+});
+<span class="k">const</span> { code } = <span class="k">await</span> r.json();
+console.log(<span class="s">'Pairing code:'</span>, code);</pre>
+
+<h2>Rate limits</h2>
+<ul>
+  <li><strong>3 concurrent sessions</strong> per API key.</li>
+  <li><strong>20 new sessions per hour</strong> per API key.</li>
+</ul>
+<p>Exceeding either returns <code>429</code> with the reason.</p>
+
+<h2>Notes</h2>
+<ul>
+  <li>Pairing codes expire in ~60 seconds.</li>
+  <li>Sessions end on their own when WhatsApp terminates the account.</li>
+  <li>Deleting a session removes its local credentials — the number can be re-paired cleanly.</li>
+</ul>
+
+<p style="margin-top:48px;color:#6b6f76;font-size:12px;">bothub API v1 · pairing codes are for accounts you own and control.</p>
+</main>
+</body>
+</html>
