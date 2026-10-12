@@ -659,6 +659,9 @@ app.get(['/panel', '/panel/'], (req, res) => {
   res.sendFile(path.join(__dirname, 'panel.html'));
 });
 
+// keepalive endpoint — cheapest possible response, used by external pings
+app.get('/healthz', (req, res) => res.json({ ok: true, t: Date.now() }));
+
 app.listen(PORT, () => {
   console.log(`[bothub] http://localhost:${PORT}`);
   console.log(`[bothub] mail=${RESEND_API_KEY ? 'resend' : 'console-fallback'}`);
