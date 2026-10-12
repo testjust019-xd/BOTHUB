@@ -15,8 +15,19 @@
     padding: 24px;
   }
   main { width: 100%; max-width: 420px; }
-  h1 { font-size: 26px; margin: 0 0 24px; letter-spacing: -0.01em; }
+
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+  h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
   h1 .dim { color: #6b6f76; font-weight: 400; }
+  .head a.cta {
+    font-size: 12px; letter-spacing: 0.04em;
+    color: #8b8f96; text-decoration: none;
+    border: 1px solid #262a30; border-radius: 999px;
+    padding: 5px 12px; transition: all .15s;
+    white-space: nowrap;
+  }
+  .head a.cta:hover { color: #e7e7ea; border-color: #3b82f6; }
+
   form { display: grid; gap: 14px; margin-bottom: 24px; }
   label { display: grid; gap: 6px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b8f96; }
   input, select {
@@ -34,6 +45,7 @@
   button:hover:not(:disabled) { background: #2f6fd4; }
   button:active:not(:disabled) { transform: scale(0.99); }
   button:disabled { opacity: .6; cursor: wait; }
+
   .code-block { background: #14161a; border: 1px solid #262a30; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
   .code-block .label { font-size: 11px; letter-spacing: 0.22em; color: #6b6f76; margin-bottom: 10px; }
   .code-wrap { display: flex; align-items: center; gap: 12px; }
@@ -43,14 +55,43 @@
   .copy-btn:hover { color: #e7e7ea; border-color: #3b82f6; }
   .copy-btn.copied { color: #34d399; border-color: #34d399; }
   .code-block p { color: #8b8f96; font-size: 13px; margin: 12px 0 0; }
-  .status { font-family: ui-monospace, monospace; font-size: 12px; color: #8b8f96; white-space: pre-wrap; }
+
+  .status { font-family: ui-monospace, monospace; font-size: 12px; color: #8b8f96; white-space: pre-wrap; min-height: 18px; }
   .status .ok { color: #34d399; }
   .status .bad { color: #f87171; }
+
+  /* footer API band */
+  .api-band {
+    margin-top: 28px;
+    padding: 16px 18px;
+    border: 1px solid #1c2a44;
+    background: linear-gradient(180deg, #0f1421, #0b0c0f);
+    border-radius: 12px;
+    display: flex; align-items: center; gap: 14px;
+    text-decoration: none; color: inherit;
+    transition: border-color .15s, transform .1s;
+  }
+  .api-band:hover { border-color: #3b82f6; }
+  .api-band:active { transform: scale(0.99); }
+  .api-band .glyph {
+    width: 34px; height: 34px; border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+    background: #182535; color: #60a5fa;
+    font-family: ui-monospace, monospace; font-weight: 600; font-size: 14px;
+    flex: 0 0 auto;
+  }
+  .api-band .body { flex: 1; }
+  .api-band .title { font-size: 13px; font-weight: 600; }
+  .api-band .sub { font-size: 12px; color: #8b8f96; margin-top: 2px; }
+  .api-band .arrow { color: #60a5fa; font-size: 16px; }
 </style>
 </head>
 <body>
 <main>
-  <h1>bothub <span class="dim">· pairing</span></h1>
+  <div class="head">
+    <h1>bothub <span class="dim">· pairing</span></h1>
+    <a class="cta" href="/dashboard">Get free API</a>
+  </div>
 
   <form id="form">
     <label>phone
@@ -62,7 +103,7 @@
         <option value="2">2 — base v2 (higher)</option>
         <option value="3">3 — mini prenium</option>
         <option value="4">4 — VIP</option>
-        <option value="5">5 — ultra VIP (free)</option>
+        <option value="5">5 — Ultra VIP(ultimate)</option>
       </select>
     </label>
     <button id="btn" type="submit">get pairing code</button>
@@ -78,6 +119,15 @@
   </div>
 
   <div class="status" id="status">idle</div>
+
+  <a class="api-band" href="/dashboard">
+    <div class="glyph">bh</div>
+    <div class="body">
+      <div class="title">Get your free API key</div>
+      <div class="sub">Use the same pairing from your own bot or website.</div>
+    </div>
+    <div class="arrow">→</div>
+  </a>
 </main>
 
 <script>
