@@ -1,0 +1,363 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bothub · dashboard</title>
+<style>
+  :root { color-scheme: dark; --bg:#0b0c0f; --panel:#14161a; --border:#262a30; --muted:#8b8f96; --dim:#6b6f76; --fg:#e7e7ea; --accent:#3b82f6; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  * { box-sizing: border-box; }
+  body { margin:0; min-height:100vh; background:var(--bg); color:var(--fg); font:14px/1.55 ui-sans-serif, system-ui, sans-serif; }
+  a { color:#60a5fa; text-decoration:none; }
+  a:hover { text-decoration:underline; }
+  main { max-width:960px; margin:0 auto; padding:32px 24px; }
+  h1 { font-size:26px; margin:0 0 8px; letter-spacing:-0.01em; }
+  h1 .dim { color:var(--dim); font-weight:400; }
+  h2 { margin:28px 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:0.14em; color:var(--muted); font-weight:500; }
+  p.lead { color:var(--muted); font-size:13px; margin:0 0 22px; }
+  input, select { background:var(--panel); color:var(--fg); border:1px solid var(--border); border-radius:8px; padding:12px 14px; width:100%; font:inherit; outline:none; transition:border-color .15s; }
+  input:focus, select:focus { border-color:var(--accent); }
+  button { background:var(--accent); color:white; border:0; border-radius:8px; padding:12px 18px; font:inherit; font-weight:600; cursor:pointer; }
+  button:hover { background:#2f6fd4; }
+  button:disabled { opacity:.6; cursor:wait; }
+  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:400; font-size:12px; padding:6px 12px; letter-spacing:0.04em; }
+  button.ghost:hover { color:var(--fg); border-color:var(--accent); }
+  button.danger { color:var(--bad); border-color:#3a2020; }
+  button.danger:hover { border-color:var(--bad); }
+  form.card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; display:grid; gap:12px; }
+  label { display:block; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
+  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin:24px 0 28px; }
+  .tabs button { background:transparent; color:var(--muted); border:0; border-bottom:2px solid transparent; padding:10px 16px; font:inherit; font-size:13px; font-weight:500; letter-spacing:0.04em; cursor:pointer; border-radius:0; }
+  .tabs button:hover { color:var(--fg); background:transparent; }
+  .tabs button.active { color:var(--fg); border-bottom-color:var(--accent); }
+  section.tab { display:none; }
+  section.tab.active { display:block; }
+  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
+  .row > div { flex:1; min-width:140px; }
+  table { width:100%; border-collapse:collapse; font-family:ui-monospace,monospace; font-size:12px; }
+  th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #1c1f24; }
+  th { color:var(--dim); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:0.1em; }
+  .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; letter-spacing:.08em; }
+  .pill.pending{background:#2c2518;color:var(--warn);} .pill.connected{background:#163023;color:var(--ok);}
+  .pill.banned{background:#2c1b1b;color:var(--bad);} .pill.active{background:#163023;color:var(--ok);} .pill.revoked{background:#2c1b1b;color:var(--bad);}
+  .empty { color:var(--dim); font-style:italic; padding:16px 0; }
+  .err { color:var(--bad); font-size:13px; margin-top:8px; }
+  .ok { color:var(--ok); font-size:13px; margin-top:8px; }
+  .code-box { margin-top:16px; padding:20px; border-radius:12px; background:#10241a; border:1px solid #1d4a35; }
+  .code-box .label { color:var(--ok); font-size:11px; letter-spacing:.18em; text-transform:uppercase; margin-bottom:10px; }
+  .code-box .code { font-family:ui-monospace,monospace; font-size:28px; letter-spacing:.16em; user-select:all; cursor:pointer; word-break:break-all; }
+  .code-box .hint { color:var(--muted); font-size:12px; margin-top:10px; }
+  iframe { width:100%; height:70vh; border:1px solid var(--border); border-radius:12px; background:#0b0c0f; }
+  .auth-wrap { max-width:420px; margin:80px auto 0; }
+  .switch { margin-top:14px; color:var(--muted); font-size:13px; text-align:center; }
+  .switch a { cursor:pointer; }
+</style>
+</head>
+<body>
+
+<!-- Auth (register / login / code) -->
+<div id="auth" hidden>
+  <div class="auth-wrap">
+    <h1>bothub <span class="dim">· dashboard</span></h1>
+
+    <!-- Register -->
+    <div id="view-register" hidden>
+      <p class="lead">Create an account. You'll get API keys and session history inside.</p>
+      <form id="registerForm" class="card">
+        <div><label>email</label><input id="regEmail" type="email" autocomplete="email" required></div>
+        <div><label>password (min 8)</label><input id="regPassword" type="password" autocomplete="new-password" required></div>
+        <button type="submit">create account</button>
+        <p id="regError" class="err" hidden></p>
+      </form>
+      <p class="switch">Already have an account? <a id="toLogin">log in</a></p>
+    </div>
+
+    <!-- Login step 1 -->
+    <div id="view-login" hidden>
+      <p class="lead">Log in with your email and password.</p>
+      <form id="loginForm" class="card">
+        <div><label>email</label><input id="logEmail" type="email" autocomplete="email" required></div>
+        <div><label>password</label><input id="logPassword" type="password" autocomplete="current-password" required></div>
+        <button type="submit">continue</button>
+        <p id="logError" class="err" hidden></p>
+      </form>
+      <p class="switch">No account yet? <a id="toRegister">create one</a></p>
+    </div>
+
+    <!-- Login step 2 — code -->
+    <div id="view-code" hidden>
+      <p class="lead">We sent a 6-digit code to <strong id="codeEmail"></strong>. Enter it to finish logging in.</p>
+      <form id="codeForm" class="card">
+        <div><label>code</label><input id="logCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" required></div>
+        <button type="submit">verify</button>
+        <p id="codeError" class="err" hidden></p>
+        <p id="devCodeHint" class="ok" hidden></p>
+      </form>
+      <p class="switch"><a id="backToLogin">back to login</a></p>
+    </div>
+  </div>
+</div>
+
+<!-- Dashboard (logged in) -->
+<div id="app" hidden>
+  <main>
+    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+      <h1>bothub <span class="dim">· dashboard</span></h1>
+      <div style="display:flex; gap:12px; align-items:center; color:var(--muted); font-size:12px;">
+        <span id="acctEmail"></span>
+        <button class="ghost" id="signOut">sign out</button>
+      </div>
+    </div>
+
+    <nav class="tabs">
+      <button data-tab="overview" class="active">overview</button>
+      <button data-tab="keys">API keys</button>
+      <button data-tab="sessions">sessions</button>
+      <button data-tab="docs">docs</button>
+    </nav>
+
+    <section class="tab active" id="tab-overview">
+      <h2>Account</h2>
+      <p class="lead">API keys you create below give your bots and sites access to the pairing API.</p>
+      <div id="overviewInfo" style="font-family:ui-monospace,monospace;font-size:13px;color:var(--muted);">—</div>
+    </section>
+
+    <section class="tab" id="tab-keys">
+      <h2>Create an API key</h2>
+      <form id="newKeyForm" class="card">
+        <div><label>label</label><input id="newKeyLabel" placeholder="e.g. 'my other bot'" autocomplete="off"></div>
+        <button type="submit">create key</button>
+      </form>
+
+      <div class="code-box" id="newKeyBox" hidden>
+        <div class="label">new key — copy it now, shown once</div>
+        <div class="code" id="newKeyValue" title="click to copy">—</div>
+      </div>
+
+      <h2 style="margin-top:28px;">Your keys</h2>
+      <table>
+        <thead><tr><th>prefix</th><th>label</th><th>created</th><th>last used</th><th>uses</th><th>status</th><th></th></tr></thead>
+        <tbody id="keysTable"><tr><td colspan="7" class="empty">loading…</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="tab" id="tab-sessions">
+      <h2>Sessions</h2>
+      <p class="lead">Pairing sessions created through your keys. Each session is tied to the phone that paired.</p>
+      <table>
+        <thead><tr><th>phone</th><th>level</th><th>status</th><th>sends</th><th>created</th><th></th></tr></thead>
+        <tbody id="sessionsTable"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+      </table>
+    </section>
+
+    <section class="tab" id="tab-docs">
+      <h2>API docs</h2>
+      <p class="lead">Same reference as <a href="/docs" target="_blank">/docs</a>.</p>
+      <iframe src="/docs"></iframe>
+    </section>
+  </main>
+</div>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const SESSION_KEY = 'bothub.session_token';
+  let poll = null;
+
+  function getSession() { return localStorage.getItem(SESSION_KEY) || ''; }
+  function setSession(t) { localStorage.setItem(SESSION_KEY, t); }
+  function clearSession() { localStorage.removeItem(SESSION_KEY); }
+
+  function showView(name) {
+    ['register', 'login', 'code'].forEach(v => $('view-' + v).hidden = v !== name);
+  }
+
+  async function api(path, opts = {}, { session = true } = {}) {
+    const headers = { 'Content-Type': 'application/json', ...(opts.headers || {}) };
+    if (session && getSession()) headers['Authorization'] = 'Bearer ' + getSession();
+    const r = await fetch(path, { ...opts, headers });
+    const data = await r.json().catch(() => ({}));
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    return data;
+  }
+
+  // ── Register ──
+  $('registerForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('regError').hidden = true;
+    const email = $('regEmail').value.trim();
+    const password = $('regPassword').value;
+    try {
+      await api('/api/auth/register', { method: 'POST', body: JSON.stringify({ email, password }) }, { session: false });
+      $('logEmail').value = email;
+      $('logPassword').value = '';
+      showView('login');
+    } catch (err) {
+      $('regError').textContent = err.message;
+      $('regError').hidden = false;
+    }
+  });
+
+  // ── Login step 1 ──
+  $('loginForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('logError').hidden = true;
+    const email = $('logEmail').value.trim();
+    const password = $('logPassword').value;
+    try {
+      const r = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }, { session: false });
+      window._pendingToken = r.pendingToken;
+      $('codeEmail').textContent = email;
+      showView('code');
+      $('logCode').value = '';
+      $('devCodeHint').hidden = true;
+      if (r.devCode) {
+        // No mailer configured — show the code so testing works.
+        $('devCodeHint').textContent = 'dev mode — code is ' + r.devCode;
+        $('devCodeHint').hidden = false;
+      }
+    } catch (err) {
+      $('logError').textContent = err.message;
+      $('logError').hidden = false;
+    }
+  });
+
+  // ── Login step 2 ──
+  $('codeForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    $('codeError').hidden = true;
+    const code = $('logCode').value.trim();
+    try {
+      const r = await api('/api/auth/verify', {
+        method: 'POST',
+        body: JSON.stringify({ pendingToken: window._pendingToken, code }),
+      }, { session: false });
+      setSession(r.sessionToken);
+      startApp();
+    } catch (err) {
+      $('codeError').textContent = err.message;
+      $('codeError').hidden = false;
+    }
+  });
+
+  $('toLogin').addEventListener('click', () => showView('login'));
+  $('toRegister').addEventListener('click', () => showView('register'));
+  $('backToLogin').addEventListener('click', () => showView('login'));
+
+  $('signOut').addEventListener('click', async () => {
+    try { await api('/api/auth/logout', { method: 'POST' }); } catch {}
+    clearSession();
+    if (poll) clearInterval(poll);
+    $('app').hidden = true;
+    $('auth').hidden = false;
+    showView('login');
+  });
+
+  // ── Tabs ──
+  document.querySelectorAll('.tabs button').forEach(b => {
+    b.addEventListener('click', () => {
+      document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('section.tab').forEach(x => x.classList.remove('active'));
+      b.classList.add('active');
+      $('tab-' + b.dataset.tab).classList.add('active');
+    });
+  });
+
+  // ── Load overview ──
+  async function loadOverview() {
+    try {
+      const me = await api('/api/auth/me');
+      $('acctEmail').textContent = me.email;
+      $('overviewInfo').innerHTML =
+        `email: ${me.email}<br>account id: ${me.id}<br>created: ${(me.created || '').slice(0, 19).replace('T', ' ')}`;
+    } catch (err) {
+      if (err.message.includes('session')) { $('signOut').click(); }
+    }
+  }
+
+  // ── Keys ──
+  async function loadKeys() {
+    try {
+      const list = await api('/api/account/keys');
+      const tb = $('keysTable');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">no keys yet</td></tr>'; return; }
+      tb.innerHTML = list.map(k => `
+        <tr class="${k.revoked ? 'revoked' : ''}" style="${k.revoked ? 'color:var(--dim);text-decoration:line-through;' : ''}">
+          <td>${k.prefix}</td>
+          <td>${k.label}</td>
+          <td>${(k.created || '').slice(0, 19).replace('T', ' ')}</td>
+          <td>${(k.lastUsed || '').slice(0, 19).replace('T', ' ') || '—'}</td>
+          <td>${k.uses || 0}</td>
+          <td><span class="pill ${k.revoked ? 'revoked' : 'active'}">${k.revoked ? 'revoked' : 'active'}</span></td>
+          <td>${k.revoked ? '' : `<button class="ghost danger" data-id="${k.id}">revoke</button>`}</td>
+        </tr>`).join('');
+      tb.querySelectorAll('button[data-id]').forEach(b => {
+        b.addEventListener('click', async () => {
+          if (!confirm('Revoke this key? Any bot using it will stop working.')) return;
+          try { await api('/api/account/keys/revoke', { method: 'POST', body: JSON.stringify({ id: b.dataset.id }) }); } catch {}
+          loadKeys();
+        });
+      });
+    } catch {}
+  }
+
+  $('newKeyForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const label = $('newKeyLabel').value || 'default';
+    try {
+      const r = await api('/api/account/keys', { method: 'POST', body: JSON.stringify({ label }) });
+      $('newKeyBox').hidden = false;
+      $('newKeyValue').textContent = r.key;
+      $('newKeyLabel').value = '';
+      loadKeys();
+    } catch (err) { alert(err.message); }
+  });
+  $('newKeyValue').addEventListener('click', async () => {
+    const v = $('newKeyValue').textContent;
+    if (v && v !== '—') { try { await navigator.clipboard.writeText(v); } catch {} }
+  });
+
+  // ── Sessions ──
+  async function loadSessions() {
+    try {
+      const list = await api('/api/account/sessions');
+      const tb = $('sessionsTable');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">no sessions yet</td></tr>'; return; }
+      tb.innerHTML = list.map(s => `
+        <tr class="${s.status === 'banned' ? 'banned' : ''}">
+          <td>${s.number}</td>
+          <td>${s.level}</td>
+          <td><span class="pill ${s.status}">${s.status}</span></td>
+          <td>${s.sends || 0}</td>
+          <td>${(s.createdAt || '').slice(0, 19).replace('T', ' ')}</td>
+          <td>${s.status !== 'banned' ? `<button class="ghost danger" data-phone="${s.number}">end</button>` : ''}</td>
+        </tr>`).join('');
+      tb.querySelectorAll('button[data-phone]').forEach(b => {
+        b.addEventListener('click', async () => {
+          if (!confirm('End session for ' + b.dataset.phone + '?')) return;
+          try { await api('/api/account/sessions/end', { method: 'POST', body: JSON.stringify({ phone: b.dataset.phone }) }); } catch {}
+          loadSessions();
+        });
+      });
+    } catch {}
+  }
+
+  // ── Boot ──
+  function startApp() {
+    $('auth').hidden = true;
+    $('app').hidden = false;
+    loadOverview(); loadKeys(); loadSessions();
+    if (poll) clearInterval(poll);
+    poll = setInterval(() => { loadKeys(); loadSessions(); }, 4000);
+  }
+
+  (async () => {
+    if (getSession()) {
+      try { await api('/api/auth/me'); startApp(); return; }
+      catch { clearSession(); }
+    }
+    $('auth').hidden = false;
+    showView('login');
+  })();
+</script>
+</body>
+</html>

