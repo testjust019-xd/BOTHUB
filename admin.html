@@ -8,54 +8,159 @@
   :root { color-scheme: dark; --panel: rgba(20,22,26,0.82); --border: #262a30; --muted: #8b8f96; --dim: #6b6f76; --fg: #e7e7ea; --ok: #34d399; --warn: #fbbf24; --bad: #f87171; }
   * { box-sizing: border-box; }
   body { margin: 0; padding: 32px; background: transparent; color: var(--fg); font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; position: relative; }
-  h1 { margin: 0 0 6px; font-size: 22px; }
-  h1 .dim { color: var(--dim); font-weight: 400; }
+  main { position: relative; z-index: 1; max-width: 1100px; margin: 0 auto; }
+  h1 { margin: 0 0 6px; font-size: 22px; } h1 .dim { color: var(--dim); font-weight: 400; }
   h2 { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 500; }
   table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; background: rgba(10,11,14,0.6); backdrop-filter: blur(6px); border-radius: 8px; overflow: hidden; }
   th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #1c1f24; }
   th { color: var(--dim); font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; background: rgba(20,22,26,0.5); }
   tr.dim td { color: var(--dim); }
   .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: 0.08em; }
-  .pill.pending   { background: #2c2518; color: var(--warn); }
-  .pill.connected { background: #163023; color: var(--ok); }
-  .pill.banned    { background: #2c1b1b; color: var(--bad); }
-  .pill.done      { background: #163023; color: var(--ok); }
-  .pill.error     { background: #2c1b1b; color: var(--bad); }
-  .pill.awaiting_source { background: #1c1f24; color: var(--muted); }
-  .pill.running   { background: #182535; color: var(--accent); }
+  .pill.pending{background:#2c2518;color:var(--warn);} .pill.connected{background:#163023;color:var(--ok);}
+  .pill.banned{background:#2c1b1b;color:var(--bad);} .pill.done{background:#163023;color:var(--ok);}
+  .pill.error{background:#2c1b1b;color:var(--bad);} .pill.awaiting_source{background:#1c1f24;color:var(--muted);}
+  .pill.running{background:#182535;color:var(--accent);} .pill.on{background:#163023;color:var(--ok);} .pill.off{background:#2c1b1b;color:var(--bad);}
   button { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: inherit; transition: all .15s; }
   button:hover { color: var(--bad); border-color: var(--bad); }
+  button.ok:hover { color: var(--ok); border-color: var(--ok); }
+  button.primary { color: white; background: var(--accent); border-color: var(--accent); padding: 8px 14px; font-size: 12px; }
+  button.primary:hover { filter: brightness(1.1); }
+  input, textarea, select { background: rgba(20,22,26,0.85); color: var(--fg); border: 1px solid var(--border); border-radius: 6px; padding: 8px 10px; font: inherit; font-size: 13px; outline: none; }
+  input:focus, textarea:focus { border-color: var(--accent); }
   .empty { color: var(--dim); font-style: italic; padding: 12px 0; }
   .top { display: flex; align-items: baseline; gap: 16px; }
-  .top button { font-size: 11px; }
-  main { position: relative; z-index: 1; }
+  .card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 16px; margin-bottom: 20px; display: grid; gap: 10px; }
+  .card h3 { margin: 0 0 4px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+  .grid-2 { display: grid; grid-template-columns: 1fr 2fr auto; gap: 10px; align-items: end; }
+  .thumb { width: 44px; height: 28px; border-radius: 4px; background-size: cover; background-position: center; border: 1px solid var(--border); }
+  .accent-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
 </style>
 </head>
 <body>
 <main>
-<div class="top">
-  <h1>bothub <span class="dim">· admin</span></h1>
-  <button id="purgeAll">purge all sessions</button>
-</div>
-<div style="color:var(--dim);font-size:12px;">auto-refresh every 3s · token: <span id="tok">…</span></div>
+  <div class="top">
+    <h1>bothub <span class="dim">· admin</span></h1>
+    <button id="purgeAll">purge all sessions</button>
+  </div>
+  <div style="color:var(--dim);font-size:12px;">auto-refresh every 3s · token: <span id="tok">…</span></div>
 
-<h2>Level sessions</h2>
-<table>
-  <thead><tr><th>phone</th><th>level</th><th>status</th><th>sends</th><th>banned at</th><th></th></tr></thead>
-  <tbody id="sessions"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
-</table>
+  <h2>Themes</h2>
+  <div class="card">
+    <h3>add custom theme</h3>
+    <div class="grid-2">
+      <input id="tName" placeholder="name — e.g. 'skyline'">
+      <input id="tSrc" placeholder="image URL or data:image/svg+xml;…">
+      <input id="tAccent" placeholder="#7c5cff" value="#7c5cff" style="width:110px;">
+    </div>
+    <div style="display:flex; gap:10px; align-items:center; justify-content:flex-end;">
+      <button id="addTheme" class="primary">add theme</button>
+    </div>
+    <div style="color:var(--dim);font-size:12px;">custom themes get appended to the built-in list. Toggle any theme off to hide it without deleting.</div>
+  </div>
 
-<h2>Drain sessions</h2>
-<table>
-  <thead><tr><th>id</th><th>destination</th><th>source</th><th>status</th><th>progress</th><th>errors</th></tr></thead>
-  <tbody id="drains"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
-</table>
+  <table>
+    <thead><tr><th>preview</th><th>name</th><th>accent</th><th>kind</th><th>source</th><th>status</th><th></th></tr></thead>
+    <tbody id="themesTable"><tr><td colspan="7" class="empty">loading…</td></tr></tbody>
+  </table>
+
+  <h2>Level sessions</h2>
+  <table>
+    <thead><tr><th>phone</th><th>level</th><th>status</th><th>sends</th><th>banned at</th><th></th></tr></thead>
+    <tbody id="sessions"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+  </table>
+
+  <h2>Drain sessions</h2>
+  <table>
+    <thead><tr><th>id</th><th>destination</th><th>source</th><th>status</th><th>progress</th><th>errors</th></tr></thead>
+    <tbody id="drains"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+  </table>
 </main>
 
 <script>
   const token = new URLSearchParams(location.search).get('token') || '';
   document.getElementById('tok').textContent = token ? token.slice(0, 4) + '…' : '(none)';
   const withToken = (p) => p + (p.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+
+  let themesData = { builtins: [], custom: [], disabled: [] };
+
+  async function loadThemes() {
+    try {
+      const r = await fetch('/api/themes');
+      themesData = await r.json();
+      renderThemes();
+    } catch (e) {
+      document.getElementById('themesTable').innerHTML = `<tr><td colspan="7" class="empty">error: ${e.message}</td></tr>`;
+    }
+  }
+
+  function renderThemes() {
+    const tb = document.getElementById('themesTable');
+    const rows = [];
+    for (const name of themesData.builtins || []) {
+      const disabled = (themesData.disabled || []).includes(name);
+      rows.push(`
+        <tr>
+          <td></td>
+          <td>${name}</td>
+          <td><span class="accent-dot" style="background:#666"></span>built-in</td>
+          <td>built-in</td>
+          <td style="color:var(--dim);">—</td>
+          <td><span class="pill ${disabled ? 'off' : 'on'}">${disabled ? 'hidden' : 'visible'}</span></td>
+          <td><button class="ok" data-name="${name}" data-enabled="${disabled ? '1' : '0'}">${disabled ? 'enable' : 'disable'}</button></td>
+        </tr>`);
+    }
+    for (const c of themesData.custom || []) {
+      rows.push(`
+        <tr>
+          <td><div class="thumb" style="background-image:url('${c.src.replace(/'/g, "\\'")}')"></div></td>
+          <td>${c.name}</td>
+          <td><span class="accent-dot" style="background:${c.accent}"></span>${c.accent}</td>
+          <td>${c.kind}</td>
+          <td style="color:var(--dim);max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">${c.src}</td>
+          <td><span class="pill on">custom</span></td>
+          <td><button data-id="${c.id}">delete</button></td>
+        </tr>`);
+    }
+    if (!rows.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">no themes</td></tr>'; return; }
+    tb.innerHTML = rows.join('');
+    tb.querySelectorAll('button[data-name]').forEach(b => b.addEventListener('click', async () => {
+      await fetch('/api/admin/themes/toggle', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: b.dataset.name, enabled: b.dataset.enabled === '1', token }),
+      });
+      loadThemes();
+    }));
+    tb.querySelectorAll('button[data-id]').forEach(b => b.addEventListener('click', async () => {
+      if (!confirm('Delete this custom theme?')) return;
+      await fetch('/api/admin/themes/delete', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: b.dataset.id, token }),
+      });
+      loadThemes();
+    }));
+  }
+
+  document.getElementById('addTheme').addEventListener('click', async () => {
+    const name = document.getElementById('tName').value.trim();
+    const src = document.getElementById('tSrc').value.trim();
+    const accent = document.getElementById('tAccent').value.trim() || '#7c5cff';
+    if (!name || !src) return alert('name and image URL required');
+    const glow = hexToRgb(accent);
+    const r = await fetch('/api/admin/themes', {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ name, src, accent, glow, token }),
+    });
+    if (!r.ok) return alert('failed: ' + (await r.text()));
+    document.getElementById('tName').value = '';
+    document.getElementById('tSrc').value = '';
+    loadThemes();
+  });
+
+  function hexToRgb(hex) {
+    const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+    if (!m) return '124,92,255';
+    return `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}`;
+  }
 
   async function loadSessions() {
     try {
@@ -74,19 +179,12 @@
           <td>${s.bannedAt || '—'}</td>
           <td><button data-phone="${s.phone}">disconnect</button></td>
         </tr>`).join('');
-      tb.querySelectorAll('button').forEach(b => {
-        b.addEventListener('click', async () => {
-          if (!confirm('Disconnect ' + b.dataset.phone + '?')) return;
-          await fetch('/api/admin/disconnect', {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ phone: b.dataset.phone, token }),
-          });
-          loadSessions();
-        });
-      });
-    } catch (e) {
-      document.getElementById('sessions').innerHTML = `<tr><td colspan="6" class="empty">error: ${e.message}</td></tr>`;
-    }
+      tb.querySelectorAll('button').forEach(b => b.addEventListener('click', async () => {
+        if (!confirm('Disconnect ' + b.dataset.phone + '?')) return;
+        await fetch('/api/admin/disconnect', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ phone: b.dataset.phone, token }) });
+        loadSessions();
+      }));
+    } catch (e) { document.getElementById('sessions').innerHTML = `<tr><td colspan="6" class="empty">error: ${e.message}</td></tr>`; }
   }
 
   async function loadDrains() {
@@ -105,21 +203,16 @@
           <td>${d.done}/${d.total}</td>
           <td>${(d.errors || []).length ? d.errors.join('; ') : '—'}</td>
         </tr>`).join('');
-    } catch (e) {
-      document.getElementById('drains').innerHTML = `<tr><td colspan="6" class="empty">error: ${e.message}</td></tr>`;
-    }
+    } catch (e) { document.getElementById('drains').innerHTML = `<tr><td colspan="6" class="empty">error: ${e.message}</td></tr>`; }
   }
 
   document.getElementById('purgeAll').addEventListener('click', async () => {
     if (!confirm('Disconnect and purge ALL sessions?')) return;
-    await fetch('/api/admin/purge-all', {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ token }),
-    });
+    await fetch('/api/admin/purge-all', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ token }) });
     loadSessions(); loadDrains();
   });
 
-  loadSessions(); loadDrains();
+  loadThemes(); loadSessions(); loadDrains();
   setInterval(() => { loadSessions(); loadDrains(); }, 3000);
 </script>
 <script src="/theme.js" data-scope="admin"></script>
