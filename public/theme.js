@@ -1,4 +1,4 @@
-// public/theme.js — themes + music + settings, self-contained.
+// public/theme.js — themes + music + settings. Desktop and mobile optimized.
 //   <script src="/theme.js" data-scope="pairing"></script>
 //   <script src="/theme.js" data-scope="dashboard"></script>
 //   <script src="/theme.js" data-scope="admin"></script>
@@ -17,6 +17,9 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><rect width="600" height="600" fill="#05060a"/><g font-family="monospace" font-size="16" fill="#34d399" opacity="0.7">${text}</g></svg>`;
   })();
 
+  // respect prefers-reduced-motion
+  const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
   // ── animation engines ──
   function matrixEngine(canvas, ctx, accent) {
     const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789'.split('');
@@ -31,7 +34,7 @@
         ctx.fillText(CHARS[Math.floor(Math.random() * CHARS.length)], i * FS, drops[i] * FS);
         if (drops[i] * FS > h && Math.random() > 0.975) drops[i] = 0; drops[i]++;
       }
-      raf = requestAnimationFrame(frame);
+      if (!REDUCED) raf = requestAnimationFrame(frame);
     }
     frame(); return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }
@@ -47,7 +50,7 @@
         if (p.y < 0) p.y = h; else if (p.y > h) p.y = 0;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
       }
-      raf = requestAnimationFrame(frame);
+      if (!REDUCED) raf = requestAnimationFrame(frame);
     }
     frame(); return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }
@@ -62,7 +65,7 @@
         const k = 128 / s.z; const px = s.x * k + w / 2, py = s.y * k + h / 2; const r = Math.max(0.3, (1 - s.z / w) * 2);
         ctx.fillRect(px, py, r, r);
       }
-      raf = requestAnimationFrame(frame);
+      if (!REDUCED) raf = requestAnimationFrame(frame);
     }
     frame(); return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }
@@ -86,7 +89,7 @@
     { kind: 'anim', name: 'particles',  engine: 'particles', accent: '#60a5fa', glow: '96,165,250'  },
     { kind: 'anim', name: 'starfield',  engine: 'starfield', accent: '#e7e7ea', glow: '231,231,234' },
   ];
-  const PUBLIC_SET_NAMES  = ['solo','sword','meta','pepe','isagi','nebula','grid','waves','digits','matrix','particles','starfield'];
+  const PUBLIC_SET_NAMES   = ['solo','sword','meta','pepe','isagi','nebula','grid','waves','digits','matrix','particles','starfield'];
   const REACTIVE_SET_NAMES = ['heartbreak','restricted','banned'];
   const ROTATE_MS = 22000;
   const SERVER_TRACKS = ['track1.mp3','track2.mp3','track3.mp3','track4.mp3'];
@@ -97,11 +100,17 @@
 
   const DEFAULTS = {
     themeKey: 'solo', blur: 48, opacity: 0.9,
-    autoRotate: true, includeGenerated: true,
+    autoRotate: !REDUCED, includeGenerated: true,
     musicOn: false, musicVol: 0.35, musicTrack: '',
   };
   const settings = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
   function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
+
+  // ensure the viewport meta supports safe-area
+  try {
+    const vp = document.querySelector('meta[name="viewport"]');
+    if (vp && !vp.content.includes('viewport-fit')) vp.content = vp.content + ', viewport-fit=cover';
+  } catch {}
 
   let CUSTOM = [];
   let DISABLED = new Set();
@@ -117,9 +126,10 @@
       : (localStorage.getItem('bothub.has_session') === '1'
           ? new Set([...PUBLIC_SET_NAMES, ...REACTIVE_SET_NAMES])
           : new Set(PUBLIC_SET_NAMES));
-    return themes.filter((t) => baseSet.has(t.name) || t.customId)
-                 .filter((t) => settings.includeGenerated ? true : t.kind === 'img')
-                 .map((t) => t.name);
+    return themes
+      .filter((t) => baseSet.has(t.name) || t.customId)
+      .filter((t) => settings.includeGenerated ? true : t.kind === 'img')
+      .map((t) => t.name);
   }
 
   // ── IndexedDB for user mp3s ──
@@ -158,30 +168,82 @@
   const style = document.createElement('style');
   style.textContent = `
     :root { --accent: #3b82f6; --glow: 59,130,246; }
-    #bh-bg, #bh-bg-next { position: fixed; inset: -80px; z-index: -2; background-size: cover; background-position: center; filter: blur(var(--bh-blur, 48px)) saturate(1.35); transform: scale(1.15); transition: opacity 1s ease, filter .2s ease; pointer-events: none; will-change: opacity; }
+    * { -webkit-tap-highlight-color: transparent; }
+    html, body { overflow-x: hidden; }
+
+    #bh-bg, #bh-bg-next {
+      position: fixed; inset: -80px; z-index: -2;
+      background-size: cover; background-position: center;
+      filter: blur(var(--bh-blur, 48px)) saturate(1.35);
+      transform: scale(1.15);
+      transition: opacity 1s ease, filter .2s ease;
+      pointer-events: none; will-change: opacity;
+    }
     #bh-bg { opacity: var(--bh-opacity, 0.9); }
     #bh-bg-next { opacity: 0; }
     #bh-canvas { position: fixed; inset: 0; z-index: -2; display: none; pointer-events: none; opacity: var(--bh-opacity, 0.9); }
-    #bh-bg-overlay { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(120% 100% at 50% 0%, rgba(0,0,0,0.05) 0%, rgba(5,6,8,0.45) 55%, rgba(5,6,8,0.75) 100%); }
-    #bh-tools { position: fixed; right: 14px; bottom: 14px; z-index: 1000; display: flex; gap: 8px; align-items: center; font-family: ui-monospace, monospace; font-size: 11px; }
-    #bh-theme-chip, #bh-music-btn, #bh-settings-btn { background: rgba(20,22,26,0.78); color: #8b8f96; border: 1px solid #262a30; border-radius: 999px; padding: 6px 12px; cursor: pointer; user-select: none; backdrop-filter: blur(8px); letter-spacing: 0.08em; transition: color .15s, border-color .15s; font-family: inherit; font-size: inherit; }
+    #bh-bg-overlay {
+      position: fixed; inset: 0; z-index: -1; pointer-events: none;
+      background: radial-gradient(120% 100% at 50% 0%,
+        rgba(0,0,0,0.05) 0%, rgba(5,6,8,0.45) 55%, rgba(5,6,8,0.75) 100%);
+    }
+
+    /* ── toolbar ── */
+    #bh-tools {
+      position: fixed;
+      right: max(14px, env(safe-area-inset-right));
+      bottom: max(14px, env(safe-area-inset-bottom));
+      z-index: 1000;
+      display: flex; gap: 8px; align-items: center;
+      font-family: ui-monospace, monospace; font-size: 11px;
+    }
+    #bh-theme-chip, #bh-music-btn, #bh-settings-btn {
+      background: rgba(20,22,26,0.78); color: #8b8f96;
+      border: 1px solid #262a30; border-radius: 999px;
+      padding: 6px 12px; cursor: pointer; user-select: none;
+      backdrop-filter: blur(8px); letter-spacing: 0.08em;
+      transition: color .15s, border-color .15s, transform .05s;
+      font-family: inherit; font-size: inherit;
+    }
     #bh-music-btn, #bh-settings-btn { padding: 6px 10px; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; gap: 6px; }
     #bh-theme-chip:hover, #bh-music-btn:hover, #bh-settings-btn:hover { color: var(--accent); border-color: var(--accent); }
+    #bh-music-btn:active, #bh-settings-btn:active { transform: scale(0.94); }
     #bh-theme-chip .dot { color: var(--accent); margin-right: 6px; }
     #bh-music-btn.on, #bh-settings-btn.on { color: var(--accent); border-color: var(--accent); }
-    #bh-music-btn .disc { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at center, var(--accent) 0 2.5px, #101010 2.5px 5px, #2a2a2a 5px 6px, #101010 6px 100%); border: 1px solid #333; animation: bh-spin 1.8s linear infinite; animation-play-state: paused; }
+    #bh-music-btn .disc {
+      display: inline-block; width: 14px; height: 14px; border-radius: 50%;
+      background: radial-gradient(circle at center, var(--accent) 0 2.5px, #101010 2.5px 5px, #2a2a2a 5px 6px, #101010 6px 100%);
+      border: 1px solid #333;
+      animation: bh-spin 1.8s linear infinite;
+      animation-play-state: paused;
+    }
     #bh-music-btn.on .disc { animation-play-state: running; }
     @keyframes bh-spin { to { transform: rotate(360deg); } }
-    #bh-panel { position: fixed; right: 14px; bottom: 58px; z-index: 1001; width: 360px; max-width: calc(100vw - 28px); max-height: calc(100vh - 90px); overflow-y: auto; background: rgba(14,16,20,0.94); color: #e7e7ea; border: 1px solid #262a30; border-radius: 14px; backdrop-filter: blur(14px); box-shadow: 0 24px 60px rgba(0,0,0,0.6); font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; padding: 16px; display: none; }
+
+    /* ── settings panel ── */
+    #bh-panel {
+      position: fixed;
+      right: max(14px, env(safe-area-inset-right));
+      bottom: max(58px, calc(env(safe-area-inset-bottom) + 58px));
+      z-index: 1001;
+      width: 360px; max-width: calc(100vw - 28px);
+      max-height: calc(100vh - 90px); overflow-y: auto;
+      background: rgba(14,16,20,0.94); color: #e7e7ea;
+      border: 1px solid #262a30; border-radius: 14px;
+      backdrop-filter: blur(14px);
+      box-shadow: 0 24px 60px rgba(0,0,0,0.6);
+      font: 13px/1.5 ui-sans-serif, system-ui, sans-serif;
+      padding: 16px; display: none;
+    }
     #bh-panel.open { display: block; }
     #bh-panel h3 { margin: 0 0 14px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #8b8f96; font-weight: 500; }
     #bh-panel .section { margin-bottom: 16px; }
     #bh-panel .divider { height: 1px; background: #1c1f24; margin: 16px 0; }
     #bh-panel .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6f76; margin-bottom: 8px; display: flex; justify-content: space-between; }
     #bh-panel .label .val { color: var(--accent); }
-    #bh-panel input[type=range] { width: 100%; -webkit-appearance: none; appearance: none; height: 4px; background: #1c1f24; border-radius: 3px; outline: none; }
-    #bh-panel input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 14px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 0 0 3px rgba(var(--glow), 0.25); }
-    #bh-panel input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border: 0; border-radius: 50%; background: var(--accent); cursor: pointer; }
+    #bh-panel input[type=range] { width: 100%; -webkit-appearance: none; appearance: none; height: 6px; background: #1c1f24; border-radius: 3px; outline: none; }
+    #bh-panel input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 20px; height: 20px; border-radius: 50%; background: var(--accent); cursor: pointer; box-shadow: 0 0 0 3px rgba(var(--glow), 0.25); }
+    #bh-panel input[type=range]::-moz-range-thumb { width: 20px; height: 20px; border: 0; border-radius: 50%; background: var(--accent); cursor: pointer; }
     #bh-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 6px; }
     #bh-grid button { aspect-ratio: 16/10; border-radius: 6px; border: 1px solid #262a30; background-size: cover; background-position: center; cursor: pointer; padding: 0; position: relative; overflow: hidden; }
     #bh-grid button:hover { transform: translateY(-1px); }
@@ -189,18 +251,86 @@
     #bh-grid button[data-kind="anim"]::after { content: '▶'; position: absolute; inset: 0; display: flex; align-items: center; justify-content: center; color: var(--accent); font-size: 14px; background: rgba(5,6,8,0.55); }
     #bh-panel .toggles { display: grid; gap: 8px; font-size: 12px; color: #b8bcc4; }
     #bh-panel .toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
-    #bh-panel .toggles input { accent-color: var(--accent); }
-    #bh-panel select, #bh-panel input[type=file] { width: 100%; background: #14161a; color: #e7e7ea; border: 1px solid #262a30; border-radius: 6px; padding: 8px 10px; font: inherit; font-size: 12px; outline: none; }
+    #bh-panel .toggles input { accent-color: var(--accent); width: 16px; height: 16px; }
+    #bh-panel select, #bh-panel input[type=file] {
+      width: 100%; background: #14161a; color: #e7e7ea;
+      border: 1px solid #262a30; border-radius: 6px;
+      padding: 10px 10px; font: inherit; font-size: 14px; outline: none;
+    }
     #bh-panel select:focus { border-color: var(--accent); }
     #bh-panel .row { display: flex; gap: 6px; margin-top: 8px; }
-    #bh-panel .row button { flex: 1; background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 6px; padding: 6px 10px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
+    #bh-panel .row button {
+      flex: 1; background: transparent; color: #8b8f96; border: 1px solid #262a30;
+      border-radius: 6px; padding: 10px; font-size: 11px;
+      letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit;
+    }
     #bh-panel .row button:hover { color: var(--accent); border-color: var(--accent); }
     #bh-panel .row button.danger:hover { color: #f87171; border-color: #f87171; }
     #bh-panel .hint { color: #6b6f76; font-size: 11px; margin-top: 6px; }
     #bh-panel .row-end { display: flex; justify-content: flex-end; margin-top: 12px; }
-    #bh-panel .reset { background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 6px; padding: 5px 10px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
+    #bh-panel .reset {
+      background: transparent; color: #8b8f96; border: 1px solid #262a30;
+      border-radius: 6px; padding: 8px 12px; font-size: 11px;
+      letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit;
+    }
     #bh-panel .reset:hover { color: #f87171; border-color: #f87171; }
     body { background: #06070a; }
+
+    /* ── tablet ── */
+    @media (max-width: 900px) {
+      th, td { padding: 7px 9px; }
+      #bh-panel { width: 340px; }
+    }
+
+    /* ── mobile ── */
+    @media (max-width: 640px) {
+      body { padding: 16px; }
+      main { padding: 16px !important; max-width: 100% !important; }
+      h1 { font-size: 20px; }
+      h1 .dim { font-size: 16px; }
+      header, .head, .top { flex-wrap: wrap; gap: 8px; }
+      header button, .head a.cta, .top button { font-size: 11px; padding: 4px 10px; }
+
+      table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; border-radius: 8px; }
+      th, td { padding: 6px 8px; font-size: 11px; }
+
+      .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
+      .tabs button { padding: 8px 12px; font-size: 12px; flex: 0 0 auto; }
+
+      /* prevent iOS from zooming on focus */
+      input, select, textarea, #bh-panel select, #bh-panel input[type=file] { font-size: 16px !important; }
+
+      /* forms stack */
+      .row, .grid-2 { flex-direction: column; align-items: stretch; grid-template-columns: 1fr; }
+      .row > div, .grid-2 > div { min-width: 0; }
+
+      /* bigger touch targets */
+      button:not(#bh-music-btn):not(#bh-settings-btn) { min-height: 40px; }
+
+      /* toolbar + panel */
+      #bh-tools { right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); gap: 6px; }
+      #bh-theme-chip { padding: 5px 9px; font-size: 10px; }
+      #bh-music-btn, #bh-settings-btn { padding: 5px 8px; font-size: 13px; }
+      #bh-panel {
+        right: 8px; left: 8px; width: auto;
+        bottom: max(48px, calc(env(safe-area-inset-bottom) + 48px));
+        max-height: calc(100vh - 80px);
+        padding: 12px;
+      }
+      #bh-grid { grid-template-columns: repeat(3, 1fr); }
+    }
+
+    /* ── large desktop ── */
+    @media (min-width: 1440px) {
+      #bh-panel { width: 400px; }
+    }
+
+    /* ── reduced motion ── */
+    @media (prefers-reduced-motion: reduce) {
+      #bh-music-btn .disc { animation: none; }
+      #bh-bg, #bh-bg-next { transition: none; }
+      #bh-panel, #bh-theme-chip, #bh-music-btn, #bh-settings-btn { transition: none; }
+    }
   `;
   document.head.appendChild(style);
 
@@ -211,8 +341,7 @@
   const overlay = document.createElement('div'); overlay.id = 'bh-bg-overlay';
   const tools = document.createElement('div'); tools.id = 'bh-tools';
   const chip = document.createElement('div'); chip.id = 'bh-theme-chip'; chip.innerHTML = '<span class="dot">●</span><span class="name"></span>';
-  const musicBtn = document.createElement('button'); musicBtn.id = 'bh-music-btn'; musicBtn.type = 'button'; musicBtn.title = 'music';
-  musicBtn.innerHTML = '<span class="disc"></span>';
+  const musicBtn = document.createElement('button'); musicBtn.id = 'bh-music-btn'; musicBtn.type = 'button'; musicBtn.title = 'music'; musicBtn.innerHTML = '<span class="disc"></span>';
   const gear = document.createElement('button'); gear.id = 'bh-settings-btn'; gear.type = 'button'; gear.textContent = '⚙'; gear.title = 'settings';
   tools.appendChild(chip); tools.appendChild(musicBtn); tools.appendChild(gear);
 
@@ -259,13 +388,12 @@
   `;
 
   const audio = new Audio(); audio.loop = true; audio.preload = 'none';
-  let serverTracks = []; let userTracks = []; let musicStarted = false;
-  let objectUrl = null;
+  let serverTracks = []; let userTracks = []; let musicStarted = false; let objectUrl = null;
 
   function trackOptions() {
     const opts = [];
-    for (const s of serverTracks) opts.push({ id: s, label: s, src: '/music/' + s });
-    for (const u of userTracks) opts.push({ id: u.id, label: '⭐ ' + u.name, blobId: u.id });
+    for (const s of serverTracks) opts.push({ id: s, label: s });
+    for (const u of userTracks) opts.push({ id: u.id, label: '⭐ ' + u.name });
     return opts;
   }
 
@@ -325,7 +453,6 @@
   }
   if (document.body) inject(); else document.addEventListener('DOMContentLoaded', inject);
 
-  // ── grid ──
   function buildGrid() {
     const themes = mergedThemes();
     const allowedSet = new Set(allowedNames(themes));
@@ -335,8 +462,7 @@
       if (!allowedSet.has(t.name)) return;
       const b = document.createElement('button');
       b.type = 'button';
-      b.dataset.kind = t.kind;
-      b.dataset.name = t.name;
+      b.dataset.kind = t.kind; b.dataset.name = t.name;
       if (t.kind !== 'anim') b.style.backgroundImage = t.src;
       b.title = t.name;
       if (t.name === settings.themeKey) b.classList.add('active');
@@ -351,7 +477,6 @@
     });
   }
 
-  // ── panel bindings ──
   function bindPanel() {
     const blurEl = panel.querySelector('#bh-blur');
     const opEl = panel.querySelector('#bh-opacity');
@@ -372,7 +497,6 @@
     opEl.addEventListener('input', () => { settings.opacity = parseInt(opEl.value, 10) / 100; document.documentElement.style.setProperty('--bh-opacity', String(settings.opacity)); panel.querySelector('#bh-opacity-val').textContent = Math.round(settings.opacity * 100) + '%'; saveSettings(); });
     rotEl.addEventListener('change', () => { settings.autoRotate = rotEl.checked; saveSettings(); if (settings.autoRotate) scheduleRotate(); else if (timer) { clearTimeout(timer); timer = null; } });
     genEl.addEventListener('change', () => { settings.includeGenerated = genEl.checked; saveSettings(); buildGrid(); });
-
     volEl.addEventListener('input', () => { settings.musicVol = parseInt(volEl.value, 10) / 100; audio.volume = settings.musicVol; panel.querySelector('#bh-vol-val').textContent = Math.round(settings.musicVol * 100) + '%'; saveSettings(); });
     musicOnEl.addEventListener('change', () => { settings.musicOn = musicOnEl.checked; saveSettings(); if (settings.musicOn) tryStartMusic(); else { audio.pause(); musicStarted = false; } });
     panel.querySelector('#bh-music-track').addEventListener('change', async (e) => {
@@ -421,12 +545,9 @@
     });
   }
 
-  // ── music ──
   async function loadAll() {
-    // custom themes
     try { const r = await fetch('/api/themes'); if (r.ok) { const d = await r.json(); CUSTOM = d.custom || []; DISABLED = new Set(d.disabled || []); } } catch {}
     buildGrid();
-    // music
     serverTracks = await detectServerTracks();
     try { userTracks = await listUserTracks(); } catch { userTracks = []; }
     refreshTrackSelect();
@@ -458,7 +579,6 @@
   document.addEventListener('keydown', unlock);
   document.addEventListener('touchstart', unlock, { passive: true });
 
-  // ── apply ──
   const root = document.documentElement;
   let timer = null; let stopEngine = null;
 
