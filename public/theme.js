@@ -1,9 +1,8 @@
-// public/theme.js — themes + music + settings. Desktop and mobile optimized.
+// public/theme.js — themes + music + settings + cursor. Desktop and mobile.
 //   <script src="/theme.js" data-scope="pairing"></script>
 //   <script src="/theme.js" data-scope="dashboard"></script>
 //   <script src="/theme.js" data-scope="admin"></script>
 // Pure client-side. No reload, no fetch on the pairing flow, no socket touch.
-// User-imported mp3s live in IndexedDB — they never leave the browser.
 (function () {
   const IMG = (f) => `url('/bg/${f}')`;
   const SVG = (s) => `url('data:image/svg+xml;utf8,${encodeURIComponent(s)}')`;
@@ -17,10 +16,9 @@
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><rect width="600" height="600" fill="#05060a"/><g font-family="monospace" font-size="16" fill="#34d399" opacity="0.7">${text}</g></svg>`;
   })();
 
-  // respect prefers-reduced-motion
   const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const HAS_FINE_POINTER = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-  // ── animation engines ──
   function matrixEngine(canvas, ctx, accent) {
     const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789'.split('');
     const FS = 16; let cols, drops, raf, w, h;
@@ -71,7 +69,6 @@
   }
   const ENGINES = { matrix: matrixEngine, particles: particlesEngine, starfield: starfieldEngine };
 
-  // ── built-in themes ──
   const BUILTINS = [
     { kind: 'img',  name: 'solo',       src: IMG('01.jpeg'), accent: '#7c5cff', glow: '124,92,255' },
     { kind: 'img',  name: 'sword',      src: IMG('02.jpeg'), accent: '#38bdf8', glow: '56,189,248' },
@@ -102,18 +99,17 @@
     themeKey: 'solo', blur: 48, opacity: 0.9,
     autoRotate: !REDUCED, includeGenerated: true,
     musicOn: false, musicVol: 0.35, musicTrack: '',
+    cursor: 'auto',
   };
   const settings = Object.assign({}, DEFAULTS, JSON.parse(localStorage.getItem(SETTINGS_KEY) || '{}'));
   function saveSettings() { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); }
 
-  // ensure the viewport meta supports safe-area
   try {
     const vp = document.querySelector('meta[name="viewport"]');
     if (vp && !vp.content.includes('viewport-fit')) vp.content = vp.content + ', viewport-fit=cover';
   } catch {}
 
-  let CUSTOM = [];
-  let DISABLED = new Set();
+  let CUSTOM = []; let DISABLED = new Set();
 
   function mergedThemes() {
     const builtins = BUILTINS.filter((t) => !DISABLED.has(t.name));
@@ -132,7 +128,6 @@
       .map((t) => t.name);
   }
 
-  // ── IndexedDB for user mp3s ──
   function openMusicDB() {
     return new Promise((res, rej) => {
       const req = indexedDB.open('bothub-music', 1);
@@ -164,12 +159,43 @@
     });
   }
 
-  // ── stylesheet ──
   const style = document.createElement('style');
   style.textContent = `
     :root { --accent: #3b82f6; --glow: 59,130,246; }
     * { -webkit-tap-highlight-color: transparent; }
     html, body { overflow-x: hidden; }
+
+    /* ── interactive elements get the hand by default ── */
+    a, button, [role="button"], input[type=submit], select, label { cursor: pointer; }
+
+    /* ── cursor modes ── */
+    body[data-cursor="crosshair"], body[data-cursor="crosshair"] a, body[data-cursor="crosshair"] button,
+    body[data-cursor="crosshair"] input, body[data-cursor="crosshair"] select, body[data-cursor="crosshair"] label { cursor: crosshair; }
+    body[data-cursor="cell"], body[data-cursor="cell"] a, body[data-cursor="cell"] button,
+    body[data-cursor="cell"] input, body[data-cursor="cell"] select, body[data-cursor="cell"] label { cursor: cell; }
+    body[data-cursor="pointer"], body[data-cursor="pointer"] * { cursor: pointer; }
+    body[data-cursor="none"], body[data-cursor="none"] * { cursor: none !important; }
+
+    /* ── glowing dot (custom cursor) ── */
+    #bh-dot {
+      position: fixed; top: 0; left: 0;
+      width: 14px; height: 14px; border-radius: 50%;
+      background: var(--accent);
+      box-shadow: 0 0 20px 4px rgba(var(--glow), 0.55);
+      margin-left: -7px; margin-top: -7px;
+      pointer-events: none; z-index: 999999;
+      transform: translate3d(-200px, -200px, 0);
+      transition: width .12s ease, height .12s ease, margin .12s ease, background .12s ease, border-color .12s ease, opacity .2s ease;
+      display: none;
+      will-change: transform;
+    }
+    body[data-cursor="none"] #bh-dot { display: block; }
+    #bh-dot.hover {
+      width: 34px; height: 34px; margin-left: -17px; margin-top: -17px;
+      background: transparent; border: 1.5px solid var(--accent);
+      box-shadow: 0 0 24px 6px rgba(var(--glow), 0.45);
+    }
+    #bh-dot.down { width: 10px; height: 10px; margin-left: -5px; margin-top: -5px; }
 
     #bh-bg, #bh-bg-next {
       position: fixed; inset: -80px; z-index: -2;
@@ -182,59 +208,20 @@
     #bh-bg { opacity: var(--bh-opacity, 0.9); }
     #bh-bg-next { opacity: 0; }
     #bh-canvas { position: fixed; inset: 0; z-index: -2; display: none; pointer-events: none; opacity: var(--bh-opacity, 0.9); }
-    #bh-bg-overlay {
-      position: fixed; inset: 0; z-index: -1; pointer-events: none;
-      background: radial-gradient(120% 100% at 50% 0%,
-        rgba(0,0,0,0.05) 0%, rgba(5,6,8,0.45) 55%, rgba(5,6,8,0.75) 100%);
-    }
+    #bh-bg-overlay { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(120% 100% at 50% 0%, rgba(0,0,0,0.05) 0%, rgba(5,6,8,0.45) 55%, rgba(5,6,8,0.75) 100%); }
 
-    /* ── toolbar ── */
-    #bh-tools {
-      position: fixed;
-      right: max(14px, env(safe-area-inset-right));
-      bottom: max(14px, env(safe-area-inset-bottom));
-      z-index: 1000;
-      display: flex; gap: 8px; align-items: center;
-      font-family: ui-monospace, monospace; font-size: 11px;
-    }
-    #bh-theme-chip, #bh-music-btn, #bh-settings-btn {
-      background: rgba(20,22,26,0.78); color: #8b8f96;
-      border: 1px solid #262a30; border-radius: 999px;
-      padding: 6px 12px; cursor: pointer; user-select: none;
-      backdrop-filter: blur(8px); letter-spacing: 0.08em;
-      transition: color .15s, border-color .15s, transform .05s;
-      font-family: inherit; font-size: inherit;
-    }
+    #bh-tools { position: fixed; right: max(14px, env(safe-area-inset-right)); bottom: max(14px, env(safe-area-inset-bottom)); z-index: 1000; display: flex; gap: 8px; align-items: center; font-family: ui-monospace, monospace; font-size: 11px; }
+    #bh-theme-chip, #bh-music-btn, #bh-settings-btn { background: rgba(20,22,26,0.78); color: #8b8f96; border: 1px solid #262a30; border-radius: 999px; padding: 6px 12px; cursor: pointer; user-select: none; backdrop-filter: blur(8px); letter-spacing: 0.08em; transition: color .15s, border-color .15s, transform .05s; font-family: inherit; font-size: inherit; }
     #bh-music-btn, #bh-settings-btn { padding: 6px 10px; font-size: 14px; line-height: 1; display: inline-flex; align-items: center; gap: 6px; }
     #bh-theme-chip:hover, #bh-music-btn:hover, #bh-settings-btn:hover { color: var(--accent); border-color: var(--accent); }
     #bh-music-btn:active, #bh-settings-btn:active { transform: scale(0.94); }
     #bh-theme-chip .dot { color: var(--accent); margin-right: 6px; }
     #bh-music-btn.on, #bh-settings-btn.on { color: var(--accent); border-color: var(--accent); }
-    #bh-music-btn .disc {
-      display: inline-block; width: 14px; height: 14px; border-radius: 50%;
-      background: radial-gradient(circle at center, var(--accent) 0 2.5px, #101010 2.5px 5px, #2a2a2a 5px 6px, #101010 6px 100%);
-      border: 1px solid #333;
-      animation: bh-spin 1.8s linear infinite;
-      animation-play-state: paused;
-    }
+    #bh-music-btn .disc { display: inline-block; width: 14px; height: 14px; border-radius: 50%; background: radial-gradient(circle at center, var(--accent) 0 2.5px, #101010 2.5px 5px, #2a2a2a 5px 6px, #101010 6px 100%); border: 1px solid #333; animation: bh-spin 1.8s linear infinite; animation-play-state: paused; }
     #bh-music-btn.on .disc { animation-play-state: running; }
     @keyframes bh-spin { to { transform: rotate(360deg); } }
 
-    /* ── settings panel ── */
-    #bh-panel {
-      position: fixed;
-      right: max(14px, env(safe-area-inset-right));
-      bottom: max(58px, calc(env(safe-area-inset-bottom) + 58px));
-      z-index: 1001;
-      width: 360px; max-width: calc(100vw - 28px);
-      max-height: calc(100vh - 90px); overflow-y: auto;
-      background: rgba(14,16,20,0.94); color: #e7e7ea;
-      border: 1px solid #262a30; border-radius: 14px;
-      backdrop-filter: blur(14px);
-      box-shadow: 0 24px 60px rgba(0,0,0,0.6);
-      font: 13px/1.5 ui-sans-serif, system-ui, sans-serif;
-      padding: 16px; display: none;
-    }
+    #bh-panel { position: fixed; right: max(14px, env(safe-area-inset-right)); bottom: max(58px, calc(env(safe-area-inset-bottom) + 58px)); z-index: 1001; width: 360px; max-width: calc(100vw - 28px); max-height: calc(100vh - 90px); overflow-y: auto; background: rgba(14,16,20,0.94); color: #e7e7ea; border: 1px solid #262a30; border-radius: 14px; backdrop-filter: blur(14px); box-shadow: 0 24px 60px rgba(0,0,0,0.6); font: 13px/1.5 ui-sans-serif, system-ui, sans-serif; padding: 16px; display: none; }
     #bh-panel.open { display: block; }
     #bh-panel h3 { margin: 0 0 14px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #8b8f96; font-weight: 500; }
     #bh-panel .section { margin-bottom: 16px; }
@@ -252,37 +239,22 @@
     #bh-panel .toggles { display: grid; gap: 8px; font-size: 12px; color: #b8bcc4; }
     #bh-panel .toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
     #bh-panel .toggles input { accent-color: var(--accent); width: 16px; height: 16px; }
-    #bh-panel select, #bh-panel input[type=file] {
-      width: 100%; background: #14161a; color: #e7e7ea;
-      border: 1px solid #262a30; border-radius: 6px;
-      padding: 10px 10px; font: inherit; font-size: 14px; outline: none;
-    }
+    #bh-panel select, #bh-panel input[type=file] { width: 100%; background: #14161a; color: #e7e7ea; border: 1px solid #262a30; border-radius: 6px; padding: 10px 10px; font: inherit; font-size: 14px; outline: none; cursor: pointer; }
     #bh-panel select:focus { border-color: var(--accent); }
     #bh-panel .row { display: flex; gap: 6px; margin-top: 8px; }
-    #bh-panel .row button {
-      flex: 1; background: transparent; color: #8b8f96; border: 1px solid #262a30;
-      border-radius: 6px; padding: 10px; font-size: 11px;
-      letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit;
-    }
+    #bh-panel .row button { flex: 1; background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 6px; padding: 10px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
     #bh-panel .row button:hover { color: var(--accent); border-color: var(--accent); }
     #bh-panel .row button.danger:hover { color: #f87171; border-color: #f87171; }
     #bh-panel .hint { color: #6b6f76; font-size: 11px; margin-top: 6px; }
     #bh-panel .row-end { display: flex; justify-content: flex-end; margin-top: 12px; }
-    #bh-panel .reset {
-      background: transparent; color: #8b8f96; border: 1px solid #262a30;
-      border-radius: 6px; padding: 8px 12px; font-size: 11px;
-      letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit;
-    }
+    #bh-panel .reset { background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 6px; padding: 8px 12px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
     #bh-panel .reset:hover { color: #f87171; border-color: #f87171; }
     body { background: #06070a; }
 
-    /* ── tablet ── */
     @media (max-width: 900px) {
       th, td { padding: 7px 9px; }
       #bh-panel { width: 340px; }
     }
-
-    /* ── mobile ── */
     @media (max-width: 640px) {
       body { padding: 16px; }
       main { padding: 16px !important; max-width: 100% !important; }
@@ -290,55 +262,34 @@
       h1 .dim { font-size: 16px; }
       header, .head, .top { flex-wrap: wrap; gap: 8px; }
       header button, .head a.cta, .top button { font-size: 11px; padding: 4px 10px; }
-
       table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; border-radius: 8px; }
       th, td { padding: 6px 8px; font-size: 11px; }
-
       .tabs { overflow-x: auto; -webkit-overflow-scrolling: touch; flex-wrap: nowrap; }
       .tabs button { padding: 8px 12px; font-size: 12px; flex: 0 0 auto; }
-
-      /* prevent iOS from zooming on focus */
       input, select, textarea, #bh-panel select, #bh-panel input[type=file] { font-size: 16px !important; }
-
-      /* forms stack */
       .row, .grid-2 { flex-direction: column; align-items: stretch; grid-template-columns: 1fr; }
       .row > div, .grid-2 > div { min-width: 0; }
-
-      /* bigger touch targets */
       button:not(#bh-music-btn):not(#bh-settings-btn) { min-height: 40px; }
-
-      /* toolbar + panel */
       #bh-tools { right: 8px; bottom: max(8px, env(safe-area-inset-bottom)); gap: 6px; }
       #bh-theme-chip { padding: 5px 9px; font-size: 10px; }
       #bh-music-btn, #bh-settings-btn { padding: 5px 8px; font-size: 13px; }
-      #bh-panel {
-        right: 8px; left: 8px; width: auto;
-        bottom: max(48px, calc(env(safe-area-inset-bottom) + 48px));
-        max-height: calc(100vh - 80px);
-        padding: 12px;
-      }
+      #bh-panel { right: 8px; left: 8px; width: auto; bottom: max(48px, calc(env(safe-area-inset-bottom) + 48px)); max-height: calc(100vh - 80px); padding: 12px; }
       #bh-grid { grid-template-columns: repeat(3, 1fr); }
     }
-
-    /* ── large desktop ── */
-    @media (min-width: 1440px) {
-      #bh-panel { width: 400px; }
-    }
-
-    /* ── reduced motion ── */
+    @media (min-width: 1440px) { #bh-panel { width: 400px; } }
     @media (prefers-reduced-motion: reduce) {
       #bh-music-btn .disc { animation: none; }
       #bh-bg, #bh-bg-next { transition: none; }
-      #bh-panel, #bh-theme-chip, #bh-music-btn, #bh-settings-btn { transition: none; }
+      #bh-panel, #bh-theme-chip, #bh-music-btn, #bh-settings-btn, #bh-dot { transition: none; }
     }
   `;
   document.head.appendChild(style);
 
-  // ── DOM ──
   const bg = document.createElement('div'); bg.id = 'bh-bg';
   const bgNext = document.createElement('div'); bgNext.id = 'bh-bg-next';
   const canvas = document.createElement('canvas'); canvas.id = 'bh-canvas';
   const overlay = document.createElement('div'); overlay.id = 'bh-bg-overlay';
+  const dot = document.createElement('div'); dot.id = 'bh-dot';
   const tools = document.createElement('div'); tools.id = 'bh-tools';
   const chip = document.createElement('div'); chip.id = 'bh-theme-chip'; chip.innerHTML = '<span class="dot">●</span><span class="name"></span>';
   const musicBtn = document.createElement('button'); musicBtn.id = 'bh-music-btn'; musicBtn.type = 'button'; musicBtn.title = 'music'; musicBtn.innerHTML = '<span class="disc"></span>';
@@ -359,6 +310,16 @@
     <div class="section">
       <div class="label">brightness <span class="val" id="bh-opacity-val"></span></div>
       <input type="range" id="bh-opacity" min="20" max="100" step="1">
+    </div>
+    <div class="section">
+      <div class="label">cursor</div>
+      <select id="bh-cursor">
+        <option value="auto">default</option>
+        <option value="pointer">hand (over everything)</option>
+        <option value="crosshair">crosshair</option>
+        <option value="cell">terminal cell</option>
+        <option value="none">glowing dot (desktop only)</option>
+      </select>
     </div>
     <div class="section">
       <div class="toggles">
@@ -439,6 +400,38 @@
     audio.volume = settings.musicVol;
   }
 
+  // ── custom cursor dot ──
+  function bindCursorDot() {
+    if (!HAS_FINE_POINTER) return;
+    let lastX = -200, lastY = -200;
+    let pending = false;
+    document.addEventListener('mousemove', (e) => {
+      lastX = e.clientX; lastY = e.clientY;
+      if (pending) return;
+      pending = true;
+      requestAnimationFrame(() => {
+        dot.style.transform = `translate3d(${lastX}px, ${lastY}px, 0)`;
+        pending = false;
+      });
+    }, { passive: true });
+    document.addEventListener('mouseleave', () => { dot.style.opacity = '0'; });
+    document.addEventListener('mouseenter', () => { dot.style.opacity = '1'; });
+    document.addEventListener('mouseover', (e) => {
+      if (e.target.closest('a, button, [role="button"], input, select, textarea, label')) dot.classList.add('hover');
+    });
+    document.addEventListener('mouseout', (e) => {
+      if (e.target.closest('a, button, [role="button"], input, select, textarea, label')) dot.classList.remove('hover');
+    });
+    document.addEventListener('mousedown', () => dot.classList.add('down'));
+    document.addEventListener('mouseup', () => dot.classList.remove('down'));
+  }
+
+  function applyCursor() {
+    document.body.dataset.cursor = settings.cursor || 'auto';
+    // If we're on touch only, force default (a dot cursor on touch is meaningless).
+    if (!HAS_FINE_POINTER) document.body.dataset.cursor = 'auto';
+  }
+
   function inject() {
     if (!document.body || document.getElementById('bh-bg')) return;
     document.body.insertBefore(overlay, document.body.firstChild);
@@ -447,8 +440,11 @@
     document.body.insertBefore(bg, bgNext);
     document.body.appendChild(tools);
     document.body.appendChild(panel);
+    document.body.appendChild(dot);
     buildGrid();
     bindPanel();
+    bindCursorDot();
+    applyCursor();
     loadAll();
   }
   if (document.body) inject(); else document.addEventListener('DOMContentLoaded', inject);
@@ -482,12 +478,14 @@
     const opEl = panel.querySelector('#bh-opacity');
     const rotEl = panel.querySelector('#bh-rotate');
     const genEl = panel.querySelector('#bh-gen');
+    const cursorEl = panel.querySelector('#bh-cursor');
     const musicOnEl = panel.querySelector('#bh-music-on');
     const volEl = panel.querySelector('#bh-vol');
     const fileEl = panel.querySelector('#bh-music-file');
 
     blurEl.value = settings.blur; opEl.value = Math.round(settings.opacity * 100);
     rotEl.checked = settings.autoRotate; genEl.checked = settings.includeGenerated;
+    cursorEl.value = settings.cursor || 'auto';
     musicOnEl.checked = settings.musicOn; volEl.value = Math.round(settings.musicVol * 100);
     panel.querySelector('#bh-blur-val').textContent = settings.blur + 'px';
     panel.querySelector('#bh-opacity-val').textContent = Math.round(settings.opacity * 100) + '%';
@@ -497,6 +495,7 @@
     opEl.addEventListener('input', () => { settings.opacity = parseInt(opEl.value, 10) / 100; document.documentElement.style.setProperty('--bh-opacity', String(settings.opacity)); panel.querySelector('#bh-opacity-val').textContent = Math.round(settings.opacity * 100) + '%'; saveSettings(); });
     rotEl.addEventListener('change', () => { settings.autoRotate = rotEl.checked; saveSettings(); if (settings.autoRotate) scheduleRotate(); else if (timer) { clearTimeout(timer); timer = null; } });
     genEl.addEventListener('change', () => { settings.includeGenerated = genEl.checked; saveSettings(); buildGrid(); });
+    cursorEl.addEventListener('change', () => { settings.cursor = cursorEl.value; saveSettings(); applyCursor(); });
     volEl.addEventListener('input', () => { settings.musicVol = parseInt(volEl.value, 10) / 100; audio.volume = settings.musicVol; panel.querySelector('#bh-vol-val').textContent = Math.round(settings.musicVol * 100) + '%'; saveSettings(); });
     musicOnEl.addEventListener('change', () => { settings.musicOn = musicOnEl.checked; saveSettings(); if (settings.musicOn) tryStartMusic(); else { audio.pause(); musicStarted = false; } });
     panel.querySelector('#bh-music-track').addEventListener('change', async (e) => {
@@ -529,12 +528,13 @@
       document.documentElement.style.removeProperty('--bh-opacity');
       blurEl.value = settings.blur; opEl.value = Math.round(settings.opacity * 100);
       rotEl.checked = settings.autoRotate; genEl.checked = settings.includeGenerated;
+      cursorEl.value = settings.cursor;
       musicOnEl.checked = settings.musicOn; volEl.value = Math.round(settings.musicVol * 100);
       panel.querySelector('#bh-blur-val').textContent = settings.blur + 'px';
       panel.querySelector('#bh-opacity-val').textContent = Math.round(settings.opacity * 100) + '%';
       panel.querySelector('#bh-vol-val').textContent = Math.round(settings.musicVol * 100) + '%';
       audio.pause(); musicStarted = false; musicBtn.classList.remove('on');
-      buildGrid(); applyByName(settings.themeKey); scheduleRotate();
+      buildGrid(); applyByName(settings.themeKey); applyCursor(); scheduleRotate();
     });
 
     gear.addEventListener('click', () => { panel.classList.toggle('open'); gear.classList.toggle('on', panel.classList.contains('open')); });
