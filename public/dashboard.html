@@ -5,62 +5,60 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bothub · dashboard</title>
 <style>
-  :root { color-scheme: dark; --bg:#0b0c0f; --panel:#14161a; --border:#262a30; --muted:#8b8f96; --dim:#6b6f76; --fg:#e7e7ea; --accent:#3b82f6; --ok:#34d399; --warn:#fbbf24; --bad:#f87171; }
+  :root { color-scheme: dark; --bg: transparent; --panel: rgba(20,22,26,0.82); --border: #262a30; --muted: #8b8f96; --dim: #6b6f76; --fg: #e7e7ea; --ok: #34d399; --warn: #fbbf24; --bad: #f87171; }
   * { box-sizing: border-box; }
-  body { margin:0; min-height:100vh; background:var(--bg); color:var(--fg); font:14px/1.55 ui-sans-serif, system-ui, sans-serif; }
-  a { color:#60a5fa; text-decoration:none; }
-  a:hover { text-decoration:underline; }
-  main { max-width:960px; margin:0 auto; padding:32px 24px; }
-  h1 { font-size:26px; margin:0 0 8px; letter-spacing:-0.01em; }
-  h1 .dim { color:var(--dim); font-weight:400; }
-  h2 { margin:28px 0 12px; font-size:13px; text-transform:uppercase; letter-spacing:0.14em; color:var(--muted); font-weight:500; }
-  p.lead { color:var(--muted); font-size:13px; margin:0 0 22px; }
-  input, select { background:var(--panel); color:var(--fg); border:1px solid var(--border); border-radius:8px; padding:12px 14px; width:100%; font:inherit; outline:none; transition:border-color .15s; }
-  input:focus, select:focus { border-color:var(--accent); }
-  button { background:var(--accent); color:white; border:0; border-radius:8px; padding:12px 18px; font:inherit; font-weight:600; cursor:pointer; }
-  button:hover { background:#2f6fd4; }
-  button:disabled { opacity:.6; cursor:wait; }
-  button.ghost { background:transparent; color:var(--muted); border:1px solid var(--border); font-weight:400; font-size:12px; padding:6px 12px; letter-spacing:0.04em; }
-  button.ghost:hover { color:var(--fg); border-color:var(--accent); }
-  button.danger { color:var(--bad); border-color:#3a2020; }
-  button.danger:hover { border-color:var(--bad); }
-  form.card { background:var(--panel); border:1px solid var(--border); border-radius:12px; padding:20px; margin-bottom:20px; display:grid; gap:12px; }
-  label { display:block; font-size:11px; letter-spacing:0.14em; text-transform:uppercase; color:var(--muted); margin-bottom:6px; }
-  .tabs { display:flex; gap:4px; border-bottom:1px solid var(--border); margin:24px 0 28px; }
-  .tabs button { background:transparent; color:var(--muted); border:0; border-bottom:2px solid transparent; padding:10px 16px; font:inherit; font-size:13px; font-weight:500; letter-spacing:0.04em; cursor:pointer; border-radius:0; }
-  .tabs button:hover { color:var(--fg); background:transparent; }
-  .tabs button.active { color:var(--fg); border-bottom-color:var(--accent); }
-  section.tab { display:none; }
-  section.tab.active { display:block; }
-  .row { display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap; }
-  .row > div { flex:1; min-width:140px; }
-  table { width:100%; border-collapse:collapse; font-family:ui-monospace,monospace; font-size:12px; }
-  th, td { padding:10px 12px; text-align:left; border-bottom:1px solid #1c1f24; }
-  th { color:var(--dim); font-weight:500; font-size:11px; text-transform:uppercase; letter-spacing:0.1em; }
-  .pill { display:inline-block; padding:2px 8px; border-radius:10px; font-size:11px; letter-spacing:.08em; }
+  body { margin: 0; min-height: 100vh; background: transparent; color: var(--fg); font: 14px/1.55 ui-sans-serif, system-ui, sans-serif; position: relative; }
+  a { color: var(--accent); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  main { max-width: 960px; margin: 0 auto; padding: 32px 24px; position: relative; z-index: 1; }
+  h1 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; }
+  h1 .dim { color: var(--dim); font-weight: 400; }
+  h2 { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 500; }
+  p.lead { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
+  input, select { background: var(--panel); color: var(--fg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; width: 100%; font: inherit; outline: none; transition: border-color .15s, box-shadow .15s; backdrop-filter: blur(6px); }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--glow), 0.18); }
+  button { background: var(--accent); color: white; border: 0; border-radius: 8px; padding: 12px 18px; font: inherit; font-weight: 600; cursor: pointer; transition: filter .15s, transform .05s, box-shadow .2s; box-shadow: 0 6px 28px -14px rgba(var(--glow), 0.65); }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
+  button:disabled { opacity: .6; cursor: wait; }
+  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-weight: 400; font-size: 12px; padding: 6px 12px; letter-spacing: 0.04em; box-shadow: none; }
+  button.ghost:hover:not(:disabled) { color: var(--fg); border-color: var(--accent); filter: none; }
+  button.danger { color: var(--bad); border-color: #3a2020; }
+  button.danger:hover:not(:disabled) { border-color: var(--bad); }
+  form.card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; display: grid; gap: 12px; backdrop-filter: blur(6px); }
+  label { display: block; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
+  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 24px 0 28px; }
+  .tabs button { background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; padding: 10px 16px; font: inherit; font-size: 13px; font-weight: 500; letter-spacing: 0.04em; cursor: pointer; border-radius: 0; box-shadow: none; }
+  .tabs button:hover { color: var(--fg); background: transparent; filter: none; }
+  .tabs button.active { color: var(--fg); border-bottom-color: var(--accent); }
+  section.tab { display: none; }
+  section.tab.active { display: block; }
+  .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
+  .row > div { flex: 1; min-width: 140px; }
+  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; background: rgba(10,11,14,0.6); backdrop-filter: blur(6px); border-radius: 8px; overflow: hidden; }
+  th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #1c1f24; }
+  th { color: var(--dim); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; background: rgba(20,22,26,0.5); }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: .08em; }
   .pill.pending{background:#2c2518;color:var(--warn);} .pill.connected{background:#163023;color:var(--ok);}
   .pill.banned{background:#2c1b1b;color:var(--bad);} .pill.active{background:#163023;color:var(--ok);} .pill.revoked{background:#2c1b1b;color:var(--bad);}
-  .empty { color:var(--dim); font-style:italic; padding:16px 0; }
-  .err { color:var(--bad); font-size:13px; margin-top:8px; }
-  .ok { color:var(--ok); font-size:13px; margin-top:8px; }
-  .code-box { margin-top:16px; padding:20px; border-radius:12px; background:#10241a; border:1px solid #1d4a35; }
-  .code-box .label { color:var(--ok); font-size:11px; letter-spacing:.18em; text-transform:uppercase; margin-bottom:10px; }
-  .code-box .code { font-family:ui-monospace,monospace; font-size:28px; letter-spacing:.16em; user-select:all; cursor:pointer; word-break:break-all; }
-  .code-box .hint { color:var(--muted); font-size:12px; margin-top:10px; }
-  iframe { width:100%; height:70vh; border:1px solid var(--border); border-radius:12px; background:#0b0c0f; }
-  .auth-wrap { max-width:420px; margin:80px auto 0; }
-  .switch { margin-top:14px; color:var(--muted); font-size:13px; text-align:center; }
-  .switch a { cursor:pointer; }
+  .empty { color: var(--dim); font-style: italic; padding: 16px 0; }
+  .err { color: var(--bad); font-size: 13px; margin-top: 8px; }
+  .ok { color: var(--ok); font-size: 13px; margin-top: 8px; }
+  .code-box { margin-top: 16px; padding: 20px; border-radius: 12px; background: rgba(16,36,26,0.75); border: 1px solid #1d4a35; backdrop-filter: blur(6px); }
+  .code-box .label { color: var(--ok); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; margin-bottom: 10px; }
+  .code-box .code { font-family: ui-monospace, monospace; font-size: 26px; letter-spacing: .16em; user-select: all; cursor: pointer; word-break: break-all; }
+  .code-box .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
+  iframe { width: 100%; height: 70vh; border: 1px solid var(--border); border-radius: 12px; background: #0b0c0f; }
+  .auth-wrap { max-width: 420px; margin: 80px auto 0; }
+  .switch { margin-top: 14px; color: var(--muted); font-size: 13px; text-align: center; }
+  .switch a { cursor: pointer; }
 </style>
 </head>
 <body>
 
-<!-- Auth (register / login / code) -->
 <div id="auth" hidden>
   <div class="auth-wrap">
     <h1>bothub <span class="dim">· dashboard</span></h1>
 
-    <!-- Register -->
     <div id="view-register" hidden>
       <p class="lead">Create an account. You'll get API keys and session history inside.</p>
       <form id="registerForm" class="card">
@@ -72,7 +70,6 @@
       <p class="switch">Already have an account? <a id="toLogin">log in</a></p>
     </div>
 
-    <!-- Login step 1 -->
     <div id="view-login" hidden>
       <p class="lead">Log in with your email and password.</p>
       <form id="loginForm" class="card">
@@ -84,7 +81,6 @@
       <p class="switch">No account yet? <a id="toRegister">create one</a></p>
     </div>
 
-    <!-- Login step 2 — code -->
     <div id="view-code" hidden>
       <p class="lead">We sent a 6-digit code to <strong id="codeEmail"></strong>. Enter it to finish logging in.</p>
       <form id="codeForm" class="card">
@@ -98,7 +94,6 @@
   </div>
 </div>
 
-<!-- Dashboard (logged in) -->
 <div id="app" hidden>
   <main>
     <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
@@ -180,7 +175,6 @@
     return data;
   }
 
-  // ── Register ──
   $('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('regError').hidden = true;
@@ -197,7 +191,6 @@
     }
   });
 
-  // ── Login step 1 ──
   $('loginForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('logError').hidden = true;
@@ -211,7 +204,6 @@
       $('logCode').value = '';
       $('devCodeHint').hidden = true;
       if (r.devCode) {
-        // No mailer configured — show the code so testing works.
         $('devCodeHint').textContent = 'dev mode — code is ' + r.devCode;
         $('devCodeHint').hidden = false;
       }
@@ -221,7 +213,6 @@
     }
   });
 
-  // ── Login step 2 ──
   $('codeForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('codeError').hidden = true;
@@ -252,7 +243,6 @@
     showView('login');
   });
 
-  // ── Tabs ──
   document.querySelectorAll('.tabs button').forEach(b => {
     b.addEventListener('click', () => {
       document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('active'));
@@ -262,7 +252,6 @@
     });
   });
 
-  // ── Load overview ──
   async function loadOverview() {
     try {
       const me = await api('/api/auth/me');
@@ -274,14 +263,13 @@
     }
   }
 
-  // ── Keys ──
   async function loadKeys() {
     try {
       const list = await api('/api/account/keys');
       const tb = $('keysTable');
       if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">no keys yet</td></tr>'; return; }
       tb.innerHTML = list.map(k => `
-        <tr class="${k.revoked ? 'revoked' : ''}" style="${k.revoked ? 'color:var(--dim);text-decoration:line-through;' : ''}">
+        <tr style="${k.revoked ? 'color:var(--dim);text-decoration:line-through;' : ''}">
           <td>${k.prefix}</td>
           <td>${k.label}</td>
           <td>${(k.created || '').slice(0, 19).replace('T', ' ')}</td>
@@ -316,14 +304,14 @@
     if (v && v !== '—') { try { await navigator.clipboard.writeText(v); } catch {} }
   });
 
-  // ── Sessions ──
   async function loadSessions() {
     try {
       const list = await api('/api/account/sessions');
+      if (list.length && window.bothubMarkSession) window.bothubMarkSession();
       const tb = $('sessionsTable');
       if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">no sessions yet</td></tr>'; return; }
       tb.innerHTML = list.map(s => `
-        <tr class="${s.status === 'banned' ? 'banned' : ''}">
+        <tr class="${s.status === 'banned' ? 'banned' : ''}" style="${s.status === 'banned' ? 'color:var(--dim);' : ''}">
           <td>${s.number}</td>
           <td>${s.level}</td>
           <td><span class="pill ${s.status}">${s.status}</span></td>
@@ -341,7 +329,6 @@
     } catch {}
   }
 
-  // ── Boot ──
   function startApp() {
     $('auth').hidden = true;
     $('app').hidden = false;
@@ -359,5 +346,6 @@
     showView('login');
   })();
 </script>
+<script src="/theme.js" data-scope="dashboard"></script>
 </body>
 </html>

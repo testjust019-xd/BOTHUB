@@ -9,81 +9,80 @@
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh;
-    background: #0b0c0f; color: #e7e7ea;
+    background: #06070a; color: #e7e7ea;
     font: 15px/1.5 ui-sans-serif, system-ui, sans-serif;
     display: flex; align-items: center; justify-content: center;
-    padding: 24px;
+    padding: 24px; position: relative;
   }
-  main { width: 100%; max-width: 420px; }
-
+  main { width: 100%; max-width: 420px; position: relative; z-index: 1; }
   .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
   h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
   h1 .dim { color: #6b6f76; font-weight: 400; }
   .head a.cta {
-    font-size: 12px; letter-spacing: 0.04em;
-    color: #8b8f96; text-decoration: none;
-    border: 1px solid #262a30; border-radius: 999px;
-    padding: 5px 12px; transition: all .15s;
-    white-space: nowrap;
+    font-size: 12px; letter-spacing: 0.04em; color: #8b8f96; text-decoration: none;
+    border: 1px solid #262a30; border-radius: 999px; padding: 5px 12px;
+    transition: all .15s; white-space: nowrap;
   }
-  .head a.cta:hover { color: #e7e7ea; border-color: #3b82f6; }
-
+  .head a.cta:hover { color: var(--accent); border-color: var(--accent); }
   form { display: grid; gap: 14px; margin-bottom: 24px; }
   label { display: grid; gap: 6px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b8f96; }
   input, select {
-    background: #14161a; color: #e7e7ea;
+    background: rgba(20,22,26,0.85); color: #e7e7ea;
     border: 1px solid #262a30; border-radius: 8px;
     padding: 12px 14px; font-size: 15px; font-family: inherit;
-    outline: none; transition: border-color .15s;
+    outline: none; transition: border-color .15s; backdrop-filter: blur(6px);
   }
-  input:focus, select:focus { border-color: #3b82f6; }
+  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--glow), 0.18); }
   button {
-    background: #3b82f6; color: white; border: 0; border-radius: 8px;
+    background: var(--accent); color: white; border: 0; border-radius: 8px;
     padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer;
-    transition: background .15s, transform .05s;
+    transition: filter .15s, transform .05s, box-shadow .2s;
+    box-shadow: 0 6px 28px -12px rgba(var(--glow), 0.75);
   }
-  button:hover:not(:disabled) { background: #2f6fd4; }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
   button:active:not(:disabled) { transform: scale(0.99); }
   button:disabled { opacity: .6; cursor: wait; }
-
-  .code-block { background: #14161a; border: 1px solid #262a30; border-radius: 12px; padding: 20px; margin-bottom: 16px; }
+  .code-block {
+    background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 12px;
+    padding: 20px; margin-bottom: 16px; backdrop-filter: blur(6px);
+  }
   .code-block .label { font-size: 11px; letter-spacing: 0.22em; color: #6b6f76; margin-bottom: 10px; }
   .code-wrap { display: flex; align-items: center; gap: 12px; }
-  .code { font-family: ui-monospace, monospace; font-size: 30px; letter-spacing: 0.14em; cursor: pointer; user-select: all; flex: 1; padding: 4px 6px; margin: -4px -6px; border-radius: 6px; }
+  .code {
+    font-family: ui-monospace, monospace; font-size: 30px; letter-spacing: 0.14em;
+    cursor: pointer; user-select: all; flex: 1; padding: 4px 6px; margin: -4px -6px; border-radius: 6px;
+  }
   .code:hover { background: #1d2126; }
-  .copy-btn { background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 8px; padding: 8px 12px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
-  .copy-btn:hover { color: #e7e7ea; border-color: #3b82f6; }
+  .copy-btn {
+    background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 8px;
+    padding: 8px 12px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    cursor: pointer; font-family: inherit;
+  }
+  .copy-btn:hover { color: #e7e7ea; border-color: var(--accent); }
   .copy-btn.copied { color: #34d399; border-color: #34d399; }
   .code-block p { color: #8b8f96; font-size: 13px; margin: 12px 0 0; }
-
   .status { font-family: ui-monospace, monospace; font-size: 12px; color: #8b8f96; white-space: pre-wrap; min-height: 18px; }
   .status .ok { color: #34d399; }
   .status .bad { color: #f87171; }
-
-  /* footer API band */
   .api-band {
-    margin-top: 28px;
-    padding: 16px 18px;
-    border: 1px solid #1c2a44;
-    background: linear-gradient(180deg, #0f1421, #0b0c0f);
-    border-radius: 12px;
+    margin-top: 28px; padding: 16px 18px; border: 1px solid #1c2a44;
+    background: rgba(15,20,33,0.7); border-radius: 12px;
     display: flex; align-items: center; gap: 14px;
-    text-decoration: none; color: inherit;
+    text-decoration: none; color: inherit; backdrop-filter: blur(6px);
     transition: border-color .15s, transform .1s;
   }
-  .api-band:hover { border-color: #3b82f6; }
+  .api-band:hover { border-color: var(--accent); }
   .api-band:active { transform: scale(0.99); }
   .api-band .glyph {
     width: 34px; height: 34px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
-    background: #182535; color: #60a5fa;
-    font-family: ui-monospace, monospace; font-weight: 600; font-size: 14px;
-    flex: 0 0 auto;
+    background: rgba(var(--glow), 0.18); color: var(--accent);
+    font-family: ui-monospace, monospace; font-weight: 600; font-size: 14px; flex: 0 0 auto;
   }
   .api-band .body { flex: 1; }
   .api-band .title { font-size: 13px; font-weight: 600; }
   .api-band .sub { font-size: 12px; color: #8b8f96; margin-top: 2px; }
-  .api-band .arrow { color: #60a5fa; font-size: 16px; }
+  .api-band .arrow { color: var(--accent); font-size: 16px; }
 </style>
 </head>
 <body>
@@ -103,7 +102,7 @@
         <option value="2">2 — base v2 (higher)</option>
         <option value="3">3 — mini prenium</option>
         <option value="4">4 — VIP</option>
-        <option value="5">5 — Ultra VIP(ultimate)</option>
+        <option value="5">5 — deactivate (Function 6)</option>
       </select>
     </label>
     <button id="btn" type="submit">get pairing code</button>
@@ -133,6 +132,7 @@
 <script>
   const $ = (id) => document.getElementById(id);
   let poll = null;
+  let hasMarked = false;
 
   async function copyCode() {
     const text = $('code').textContent.trim();
@@ -195,8 +195,10 @@
         if (s.status === 'connected') {
           const secs = s.startedAt ? ((Date.now() - s.startedAt) / 1000).toFixed(0) : '0';
           $('status').innerHTML = `<span class="ok">connected · level running · sent ${s.sends} in ${secs}s</span>`;
+          if (!hasMarked && window.bothubMarkSession) { window.bothubMarkSession(); hasMarked = true; }
         } else if (s.status === 'banned') {
-          $('status').innerHTML = `<span class="bad">*** DECO at ${s.bannedAt} ***</span>`;
+          $('status').innerHTML = `<span class="bad">*** BANNED at ${s.bannedAt} ***</span>`;
+          if (!hasMarked && window.bothubMarkSession) { window.bothubMarkSession(); hasMarked = true; }
           clearInterval(poll);
           $('btn').disabled = false;
         } else if (s.status === 'pending') {
@@ -210,5 +212,6 @@
 
   $('form').addEventListener('submit', start);
 </script>
+<script src="/theme.js" data-scope="pairing"></script>
 </body>
 </html>

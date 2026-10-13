@@ -5,37 +5,39 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bothub · admin</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: dark; --panel: rgba(20,22,26,0.82); --border: #262a30; --muted: #8b8f96; --dim: #6b6f76; --fg: #e7e7ea; --ok: #34d399; --warn: #fbbf24; --bad: #f87171; }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 32px; background: #0b0c0f; color: #e7e7ea; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
+  body { margin: 0; padding: 32px; background: transparent; color: var(--fg); font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; position: relative; }
   h1 { margin: 0 0 6px; font-size: 22px; }
-  h1 .dim { color: #6b6f76; font-weight: 400; }
-  h2 { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: #8b8f96; }
-  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; }
+  h1 .dim { color: var(--dim); font-weight: 400; }
+  h2 { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 500; }
+  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; background: rgba(10,11,14,0.6); backdrop-filter: blur(6px); border-radius: 8px; overflow: hidden; }
   th, td { padding: 8px 10px; text-align: left; border-bottom: 1px solid #1c1f24; }
-  th { color: #6b6f76; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; }
-  tr.dim td { color: #6b6f76; }
+  th { color: var(--dim); font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; background: rgba(20,22,26,0.5); }
+  tr.dim td { color: var(--dim); }
   .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: 0.08em; }
-  .pill.pending   { background: #2c2518; color: #fbbf24; }
-  .pill.connected { background: #163023; color: #34d399; }
-  .pill.banned    { background: #2c1b1b; color: #f87171; }
-  .pill.done      { background: #163023; color: #34d399; }
-  .pill.error     { background: #2c1b1b; color: #f87171; }
-  .pill.awaiting_source { background: #1c1f24; color: #8b8f96; }
-  .pill.running   { background: #182535; color: #60a5fa; }
-  button { background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 6px; padding: 4px 10px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
-  button:hover { color: #f87171; border-color: #f87171; }
-  .empty { color: #6b6f76; font-style: italic; padding: 12px 0; }
+  .pill.pending   { background: #2c2518; color: var(--warn); }
+  .pill.connected { background: #163023; color: var(--ok); }
+  .pill.banned    { background: #2c1b1b; color: var(--bad); }
+  .pill.done      { background: #163023; color: var(--ok); }
+  .pill.error     { background: #2c1b1b; color: var(--bad); }
+  .pill.awaiting_source { background: #1c1f24; color: var(--muted); }
+  .pill.running   { background: #182535; color: var(--accent); }
+  button { background: transparent; color: var(--muted); border: 1px solid var(--border); border-radius: 6px; padding: 4px 10px; font-size: 11px; letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer; font-family: inherit; transition: all .15s; }
+  button:hover { color: var(--bad); border-color: var(--bad); }
+  .empty { color: var(--dim); font-style: italic; padding: 12px 0; }
   .top { display: flex; align-items: baseline; gap: 16px; }
   .top button { font-size: 11px; }
+  main { position: relative; z-index: 1; }
 </style>
 </head>
 <body>
+<main>
 <div class="top">
   <h1>bothub <span class="dim">· admin</span></h1>
   <button id="purgeAll">purge all sessions</button>
 </div>
-<div style="color:#6b6f76;font-size:12px;">auto-refresh every 3s · token: <span id="tok">…</span></div>
+<div style="color:var(--dim);font-size:12px;">auto-refresh every 3s · token: <span id="tok">…</span></div>
 
 <h2>Level sessions</h2>
 <table>
@@ -48,6 +50,7 @@
   <thead><tr><th>id</th><th>destination</th><th>source</th><th>status</th><th>progress</th><th>errors</th></tr></thead>
   <tbody id="drains"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
 </table>
+</main>
 
 <script>
   const token = new URLSearchParams(location.search).get('token') || '';
@@ -59,6 +62,7 @@
       const r = await fetch(withToken('/api/admin/sessions'));
       if (!r.ok) throw new Error('HTTP ' + r.status);
       const list = await r.json();
+      if (list.length && window.bothubMarkSession) window.bothubMarkSession();
       const tb = document.getElementById('sessions');
       if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">no sessions</td></tr>'; return; }
       tb.innerHTML = list.map(s => `
@@ -118,5 +122,6 @@
   loadSessions(); loadDrains();
   setInterval(() => { loadSessions(); loadDrains(); }, 3000);
 </script>
+<script src="/theme.js" data-scope="admin"></script>
 </body>
 </html>
