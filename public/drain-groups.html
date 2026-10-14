@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bothub · drain · groups</title>
+<style>
+  :root { color-scheme: dark; }
+  * { box-sizing: border-box; }
+  body { margin: 0; min-height: 100vh; color: #e7e7ea; font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 28px 20px 60px; position: relative; z-index: 1; }
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+  h1 { font-size: 22px; margin: 0; letter-spacing: -0.01em; }
+  h1 .dim { color: #6b6f76; font-weight: 400; }
+  .meta { color: #8b8f96; font-size: 12px; margin-bottom: 22px; font-family: ui-monospace, monospace; }
+  .meta .bad { color: #f87171; }
+  .grid { display: grid; grid-template-columns: 1fr; gap: 10px; }
+  .card {
+    background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 10px;
+    padding: 14px 16px; backdrop-filter: blur(6px);
+    display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+  }
+  .card .name { font-weight: 500; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .jid { font-family: ui-monospace, monospace; font-size: 11px; color: #6b6f76; margin-top: 2px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .card .stats { color: #8b8f96; font-size: 12px; margin-top: 6px; }
+  .card .stats span { margin-right: 12px; }
+  .card .stats .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; }
+  .card .stats .pill.admin { background: #163023; color: #34d399; }
+  .card .stats .pill.member { background: #1c1f24; color: #8b8f96; }
+  .card .actions { display: flex; gap: 6px; flex-shrink: 0; }
+  a.link-btn {
+    font-size: 12px; color: var(--accent); text-decoration: none;
+    border: 1px solid var(--accent); border-radius: 6px; padding: 6px 10px;
+    cursor: pointer; white-space: nowrap;
+    transition: filter .15s;
+  }
+  a.link-btn:hover { filter: brightness(1.15); }
+  a.link-btn.disabled { color: #6b6f76; border-color: #262a30; pointer-events: none; }
+  .empty { color: #6b6f76; font-style: italic; padding: 24px 0; text-align: center; }
+  .expired { padding: 20px; background: rgba(44,27,27,0.4); border: 1px solid #3a2020; border-radius: 10px; color: #f87171; text-align: center; }
+</style>
+</head>
+<body>
+<main>
+  <div class="head">
+    <h1>bothub <span class="dim">· drain · groups</span></h1>
+    <div id="counts" class="meta"></div>
+  </div>
+  <div class="meta" id="meta">loading…</div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<script>
+  const $ = (id) => document.getElementById(id);
+  const sessionId = (() => {
+    const parts = location.pathname.split('/').filter(Boolean);
+    return (parts[0] === 'drain' && parts[1]) ? parts[1] : null;
+  })();
+
+  async function load() {
+    if (!sessionId) return;
+    try {
+      const r = await fetch('/api/drain/' + encodeURIComponent(sessionId) + '/groups');
+      if (!r.ok) throw new Error('HTTP ' + r.status);
+      const d = await r.json();
+      const groups = d.groups || [];
+      const admins = groups.filter((g) => g.admins > 0).length;
+      $('counts').textContent = `${groups.length} group${groups.length === 1 ? '' : 's'} · admin in ${admins}`;
+      $('meta').textContent = d.fetchedAt ? 'fetched ' + d.fetchedAt.slice(0, 19).replace('T', ' ') : 'waiting for the source to connect…';
+      if (!groups.length) {
+        $('grid').innerHTML = '<div class="empty">no groups yet — this page fills in once the source phone is connected</div>';
+        return;
+      }
+      $('grid').innerHTML = groups.map((g) => `
+        <div class="card">
+          <div>
+            <div class="name">${g.name}</div>
+            <div class="jid">${g.jid}</div>
+            <div class="stats">
+              <span><span class="pill ${g.admins > 0 ? 'admin' : 'member'}">${g.admins > 0 ? 'admin' : 'member'}</span></span>
+              <span>${g.members} member${g.members === 1 ? '' : 's'}</span>
+              <span>${g.admins} admin${g.admins === 1 ? '' : 's'}</span>
+            </div>
+          </div>
+          <div class="actions">
+            ${g.invite
+              ? `<a class="link-btn" href="${g.invite}" target="_blank" rel="noopener">invite</a>`
+              : `<span class="link-btn disabled">no invite</span>`}
+          </div>
+        </div>`).join('');
+    } catch (err) {
+      $('meta').innerHTML = `<span class="bad">error: ${err.message}</span>`;
+    }
+  }
+
+  load();
+  setInterval(load, 5000);
+</script>
+<script src="/theme.js" data-scope="pairing"></script>
+</body>
+</html>
