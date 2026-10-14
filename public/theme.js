@@ -84,8 +84,7 @@
   ];
   const ALL_NAMES = BUILTINS.map((t) => t.name);
   const ROTATE_MS = 22000;
-  const SERVER_TRACKS = ['track1.mp3','track2.mp3','track3.mp3','track4.mp3'];
-
+  const SERVER_TRACKS = ['track1.mp3','track2.mp3','track3.mp3','track4.mp3','track5.mp3'];
   const scriptEl = document.currentScript || document.querySelector('script[data-scope]');
   const SCOPE = (scriptEl?.dataset?.scope || 'pairing').toLowerCase();
   const SETTINGS_KEY = 'bothub.theme_settings:' + SCOPE;
