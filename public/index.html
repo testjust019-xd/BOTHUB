@@ -7,82 +7,130 @@
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
+
   body {
     margin: 0; min-height: 100vh;
-    background: #06070a; color: #e7e7ea;
-    font: 15px/1.5 ui-sans-serif, system-ui, sans-serif;
+    color: #e7e7ea;
+    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
     display: flex; align-items: center; justify-content: center;
-    padding: 24px; position: relative;
+    padding: 24px;
   }
   main { width: 100%; max-width: 420px; position: relative; z-index: 1; }
-  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 24px; }
+
+  .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 26px; }
   h1 { font-size: 26px; margin: 0; letter-spacing: -0.01em; }
   h1 .dim { color: #6b6f76; font-weight: 400; }
   .head a.cta {
-    font-size: 12px; letter-spacing: 0.04em; color: #8b8f96; text-decoration: none;
-    border: 1px solid #262a30; border-radius: 999px; padding: 5px 12px;
-    transition: all .15s; white-space: nowrap;
+    font-size: 12px; letter-spacing: 0.04em;
+    color: #8b8f96; text-decoration: none;
+    border: 1px solid #262a30; border-radius: 999px;
+    padding: 5px 12px; transition: color .15s, border-color .15s;
+    white-space: nowrap;
   }
   .head a.cta:hover { color: var(--accent); border-color: var(--accent); }
-  form { display: grid; gap: 14px; margin-bottom: 24px; }
-  label { display: grid; gap: 6px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b8f96; }
+
+  form { display: grid; gap: 16px; margin-bottom: 26px; }
+  label { display: grid; gap: 7px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b8f96; }
+  .hint { font-size: 11px; letter-spacing: 0.02em; text-transform: none; color: #6b6f76; margin-top: -2px; }
+
   input, select {
+    width: 100%;
     background: rgba(20,22,26,0.85); color: #e7e7ea;
     border: 1px solid #262a30; border-radius: 8px;
-    padding: 12px 14px; font-size: 15px; font-family: inherit;
-    outline: none; transition: border-color .15s; backdrop-filter: blur(6px);
+    padding: 13px 14px; font-size: 16px; font-family: inherit;
+    outline: none; transition: border-color .15s, box-shadow .15s;
+    backdrop-filter: blur(6px);
   }
-  input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--glow), 0.18); }
-  button {
-    background: var(--accent); color: white; border: 0; border-radius: 8px;
-    padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer;
+  input::placeholder { color: #4a4e55; }
+  input:focus, select:focus {
+    border-color: var(--accent);
+    box-shadow: 0 0 0 3px rgba(var(--glow), 0.18);
+  }
+
+  button.primary {
+    width: 100%;
+    background: var(--accent); color: white; border: 0;
+    border-radius: 8px; padding: 15px;
+    font-size: 15px; font-weight: 600; cursor: pointer;
     transition: filter .15s, transform .05s, box-shadow .2s;
-    box-shadow: 0 6px 28px -12px rgba(var(--glow), 0.75);
+    box-shadow: 0 8px 30px -12px rgba(var(--glow), 0.7);
+    font-family: inherit;
   }
-  button:hover:not(:disabled) { filter: brightness(1.1); }
-  button:active:not(:disabled) { transform: scale(0.99); }
-  button:disabled { opacity: .6; cursor: wait; }
+  button.primary:hover:not(:disabled) { filter: brightness(1.1); }
+  button.primary:active:not(:disabled) { transform: scale(0.99); }
+  button.primary:disabled { opacity: 0.65; cursor: wait; }
+
   .code-block {
-    background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 12px;
-    padding: 20px; margin-bottom: 16px; backdrop-filter: blur(6px);
+    background: rgba(20,22,26,0.85);
+    border: 1px solid #262a30; border-radius: 12px;
+    padding: 20px; margin-bottom: 16px;
+    backdrop-filter: blur(6px);
+    animation: bh-slide-in .3s ease-out;
   }
-  .code-block .label { font-size: 11px; letter-spacing: 0.22em; color: #6b6f76; margin-bottom: 10px; }
+  @keyframes bh-slide-in {
+    from { opacity: 0; transform: translateY(6px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  .code-block .label { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #6b6f76; margin-bottom: 12px; }
   .code-wrap { display: flex; align-items: center; gap: 12px; }
   .code {
-    font-family: ui-monospace, monospace; font-size: 30px; letter-spacing: 0.14em;
-    cursor: pointer; user-select: all; flex: 1; padding: 4px 6px; margin: -4px -6px; border-radius: 6px;
+    flex: 1; min-width: 0;
+    font-family: ui-monospace, monospace;
+    font-size: clamp(24px, 8vw, 34px);
+    font-weight: 500;
+    letter-spacing: 0.14em;
+    cursor: pointer; user-select: all;
+    padding: 6px 8px; margin: -6px -8px;
+    border-radius: 6px;
+    transition: background .15s;
+    overflow-wrap: anywhere;
   }
   .code:hover { background: #1d2126; }
   .copy-btn {
-    background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 8px;
-    padding: 8px 12px; font-size: 12px; letter-spacing: 0.08em; text-transform: uppercase;
+    background: transparent; color: #8b8f96;
+    border: 1px solid #262a30; border-radius: 8px;
+    padding: 9px 12px; font-size: 12px;
+    letter-spacing: 0.08em; text-transform: uppercase;
     cursor: pointer; font-family: inherit;
+    transition: color .15s, border-color .15s;
+    flex-shrink: 0;
   }
   .copy-btn:hover { color: #e7e7ea; border-color: var(--accent); }
   .copy-btn.copied { color: #34d399; border-color: #34d399; }
-  .code-block p { color: #8b8f96; font-size: 13px; margin: 12px 0 0; }
-  .status { font-family: ui-monospace, monospace; font-size: 12px; color: #8b8f96; white-space: pre-wrap; min-height: 18px; }
+  .code-block p { color: #8b8f96; font-size: 13px; margin: 14px 0 0; }
+
+  .status {
+    font-family: ui-monospace, monospace;
+    font-size: 12px; color: #8b8f96;
+    white-space: pre-wrap; min-height: 18px;
+    margin-bottom: 26px;
+  }
   .status .ok { color: #34d399; }
+  .status .warn { color: #fbbf24; }
   .status .bad { color: #f87171; }
+
   .api-band {
-    margin-top: 28px; padding: 16px 18px; border: 1px solid #1c2a44;
-    background: rgba(15,20,33,0.7); border-radius: 12px;
     display: flex; align-items: center; gap: 14px;
-    text-decoration: none; color: inherit; backdrop-filter: blur(6px);
+    padding: 16px 18px;
+    background: rgba(15,20,33,0.7);
+    border: 1px solid #1c2a44; border-radius: 12px;
+    text-decoration: none; color: inherit;
+    backdrop-filter: blur(6px);
     transition: border-color .15s, transform .1s;
   }
   .api-band:hover { border-color: var(--accent); }
   .api-band:active { transform: scale(0.99); }
   .api-band .glyph {
-    width: 34px; height: 34px; border-radius: 8px;
+    width: 36px; height: 36px; border-radius: 8px;
     display: flex; align-items: center; justify-content: center;
     background: rgba(var(--glow), 0.18); color: var(--accent);
-    font-family: ui-monospace, monospace; font-weight: 600; font-size: 14px; flex: 0 0 auto;
+    font-family: ui-monospace, monospace; font-weight: 600; font-size: 14px;
+    flex-shrink: 0;
   }
-  .api-band .body { flex: 1; }
+  .api-band .body { flex: 1; min-width: 0; }
   .api-band .title { font-size: 13px; font-weight: 600; }
   .api-band .sub { font-size: 12px; color: #8b8f96; margin-top: 2px; }
-  .api-band .arrow { color: var(--accent); font-size: 16px; }
+  .api-band .arrow { color: var(--accent); font-size: 18px; flex-shrink: 0; }
 </style>
 </head>
 <body>
@@ -92,20 +140,23 @@
     <a class="cta" href="/dashboard">Get free API</a>
   </div>
 
-  <form id="form">
-    <label>phone
-      <input id="phone" placeholder="225..." autocomplete="off" required>
+  <form id="form" novalidate>
+    <label>
+      phone
+      <input id="phone" placeholder="225 01 02 03 04 05" autocomplete="off" inputmode="numeric" required>
+      <span class="hint">international format, no <code>+</code>, no leading 0</span>
     </label>
-    <label>level
+    <label>
+      level
       <select id="level">
-        <option value="1">1 — base</option>
-        <option value="2">2 — base v2 (higher)</option>
-        <option value="3">3 — mini prenium</option>
-        <option value="4">4 — VIP</option>
-        <option value="5">5 — deactivate (Function 6)</option>
+        <option value="1">1 — base flood</option>
+        <option value="2">2 — heavy flood</option>
+        <option value="3">3 — flood + stickers</option>
+        <option value="4">4 — flood + stickers + oversized</option>
+        <option value="5">5 — deactivate account</option>
       </select>
     </label>
-    <button id="btn" type="submit">get pairing code</button>
+    <button id="btn" class="primary" type="submit">get pairing code</button>
   </form>
 
   <div class="code-block" id="codeBlock" hidden>
@@ -131,8 +182,11 @@
 
 <script>
   const $ = (id) => document.getElementById(id);
+  const PHONE_RE = /^[1-9]\d{7,14}$/;
   let poll = null;
-  let hasMarked = false;
+  let lastCode = null;
+
+  function setStatus(html) { $('status').innerHTML = html; }
 
   async function copyCode() {
     const text = $('code').textContent.trim();
@@ -151,35 +205,48 @@
     btn.textContent = 'copied ✓'; btn.classList.add('copied');
     setTimeout(() => { btn.textContent = 'copy'; btn.classList.remove('copied'); }, 1600);
   }
+
   $('code').addEventListener('click', copyCode);
   $('copyBtn').addEventListener('click', copyCode);
 
   async function start(e) {
     e.preventDefault();
-    const phone = $('phone').value.replace(/\D/g, '');
+    const raw = $('phone').value.trim();
+    const phone = raw.replace(/\D/g, '');
     const level = parseInt($('level').value, 10);
-    if (!phone) return;
+
+    if (!PHONE_RE.test(phone)) {
+      setStatus('<span class="bad">invalid number — international format, no +, no leading 0</span>');
+      return;
+    }
+
     $('btn').disabled = true;
-    $('status').textContent = 'requesting code...';
+    $('codeBlock').hidden = true;
+    $('code').textContent = '————';
     $('copyBtn').textContent = 'copy';
     $('copyBtn').classList.remove('copied');
+    setStatus('requesting code...');
+
     try {
       const r = await fetch('/api/pair/start', {
-        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ phone, level }),
       });
       const d = await r.json();
-      if (!r.ok) throw new Error(d.error || 'failed');
+      if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
+
       if (d.code) {
         $('codeBlock').hidden = false;
         $('code').textContent = d.code;
+        lastCode = d.code;
+        setStatus(`<span class="warn">waiting for you to enter the code in WhatsApp</span>`);
       } else {
-        $('codeBlock').hidden = true;
-        $('status').innerHTML = '<span class="ok">session already registered — running</span>';
+        setStatus('<span class="ok">session already registered — running</span>');
       }
       beginPoll(phone);
     } catch (err) {
-      $('status').innerHTML = `<span class="bad">${err.message}</span>`;
+      setStatus(`<span class="bad">${err.message}</span>`);
       $('btn').disabled = false;
     }
   }
@@ -191,26 +258,41 @@
       try {
         const r = await fetch('/api/pair/status?phone=' + encodeURIComponent(phone));
         const s = await r.json();
-        const age = ((Date.now() - t0) / 1000).toFixed(0);
+        const age = Math.round((Date.now() - t0) / 1000);
+
+        if (s.code && s.code !== lastCode) {
+          $('codeBlock').hidden = false;
+          $('code').textContent = s.code;
+          lastCode = s.code;
+        }
+
         if (s.status === 'connected') {
-          const secs = s.startedAt ? ((Date.now() - s.startedAt) / 1000).toFixed(0) : '0';
-          $('status').innerHTML = `<span class="ok">connected · level running · sent ${s.sends} in ${secs}s</span>`;
-          if (!hasMarked && window.bothubMarkSession) { window.bothubMarkSession(); hasMarked = true; }
+          const secs = s.startedAt ? Math.round((Date.now() - s.startedAt) / 1000) : 0;
+          setStatus(`<span class="ok">connected · level running · sent ${s.sends} in ${secs}s</span>`);
         } else if (s.status === 'banned') {
-          $('status').innerHTML = `<span class="bad">*** BANNED at ${s.bannedAt} ***</span>`;
-          if (!hasMarked && window.bothubMarkSession) { window.bothubMarkSession(); hasMarked = true; }
+          setStatus(`<span class="bad">banned${s.bannedAt ? ' at ' + s.bannedAt : ''}</span>`);
+          clearInterval(poll);
+          $('btn').disabled = false;
+        } else if (s.status === 'expired') {
+          setStatus('<span class="warn">code expired — click get pairing code again</span>');
+          $('codeBlock').hidden = true;
+          clearInterval(poll);
+          $('btn').disabled = false;
+        } else if (s.status === 'replaced') {
+          setStatus('<span class="bad">session was opened elsewhere</span>');
           clearInterval(poll);
           $('btn').disabled = false;
         } else if (s.status === 'pending') {
-          $('status').textContent = `waiting for login · ${age}s`;
+          setStatus(`<span class="warn">waiting for login · ${age}s</span>`);
         } else {
-          $('status').textContent = `status: ${s.status}`;
+          setStatus(`status: ${s.status}`);
         }
       } catch {}
     }, 2000);
   }
 
   $('form').addEventListener('submit', start);
+  $('phone').addEventListener('input', (e) => { e.target.value = e.target.value.replace(/[^\d ]/g, ''); });
 </script>
 <script src="/theme.js" data-scope="pairing"></script>
 </body>

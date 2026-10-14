@@ -5,56 +5,151 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bothub · dashboard</title>
 <style>
-  :root { color-scheme: dark; --bg: transparent; --panel: rgba(20,22,26,0.82); --border: #262a30; --muted: #8b8f96; --dim: #6b6f76; --fg: #e7e7ea; --ok: #34d399; --warn: #fbbf24; --bad: #f87171; }
+  :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; min-height: 100vh; background: transparent; color: var(--fg); font: 14px/1.55 ui-sans-serif, system-ui, sans-serif; position: relative; }
+
+  body {
+    margin: 0; min-height: 100vh;
+    color: #e7e7ea;
+    font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
+  }
   a { color: var(--accent); text-decoration: none; }
   a:hover { text-decoration: underline; }
+
   main { max-width: 960px; margin: 0 auto; padding: 32px 24px; position: relative; z-index: 1; }
-  h1 { font-size: 26px; margin: 0 0 8px; letter-spacing: -0.01em; }
-  h1 .dim { color: var(--dim); font-weight: 400; }
-  h2 { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: var(--muted); font-weight: 500; }
-  p.lead { color: var(--muted); font-size: 13px; margin: 0 0 22px; }
-  input, select { background: var(--panel); color: var(--fg); border: 1px solid var(--border); border-radius: 8px; padding: 12px 14px; width: 100%; font: inherit; outline: none; transition: border-color .15s, box-shadow .15s; backdrop-filter: blur(6px); }
+
+  /* ── headers ── */
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; }
+  h1 { margin: 0; font-size: 26px; letter-spacing: -0.01em; }
+  h1 .dim { color: #6b6f76; font-weight: 400; }
+  h2 { margin: 26px 0 12px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #8b8f96; font-weight: 500; }
+  p.lead { color: #8b8f96; font-size: 13px; margin: 0 0 20px; }
+
+  /* ── auth ── */
+  .auth-wrap { max-width: 420px; margin: 80px auto 0; }
+  form.card {
+    background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 12px;
+    padding: 20px; margin-bottom: 18px; display: grid; gap: 14px;
+    backdrop-filter: blur(6px);
+  }
+  label { display: grid; gap: 6px; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b8f96; }
+  input, select {
+    width: 100%;
+    background: rgba(20,22,26,0.85); color: #e7e7ea;
+    border: 1px solid #262a30; border-radius: 8px;
+    padding: 12px 14px; font: inherit; font-size: 16px; outline: none;
+    transition: border-color .15s, box-shadow .15s;
+  }
   input:focus, select:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--glow), 0.18); }
-  button { background: var(--accent); color: white; border: 0; border-radius: 8px; padding: 12px 18px; font: inherit; font-weight: 600; cursor: pointer; transition: filter .15s, transform .05s, box-shadow .2s; box-shadow: 0 6px 28px -14px rgba(var(--glow), 0.65); }
+  button {
+    background: var(--accent); color: white; border: 0; border-radius: 8px;
+    padding: 13px 18px; font: inherit; font-size: 15px; font-weight: 600;
+    cursor: pointer; transition: filter .15s, transform .05s, box-shadow .2s;
+    box-shadow: 0 8px 26px -14px rgba(var(--glow), 0.7);
+  }
   button:hover:not(:disabled) { filter: brightness(1.1); }
-  button:disabled { opacity: .6; cursor: wait; }
-  button.ghost { background: transparent; color: var(--muted); border: 1px solid var(--border); font-weight: 400; font-size: 12px; padding: 6px 12px; letter-spacing: 0.04em; box-shadow: none; }
-  button.ghost:hover:not(:disabled) { color: var(--fg); border-color: var(--accent); filter: none; }
-  button.danger { color: var(--bad); border-color: #3a2020; }
-  button.danger:hover:not(:disabled) { border-color: var(--bad); }
-  form.card { background: var(--panel); border: 1px solid var(--border); border-radius: 12px; padding: 20px; margin-bottom: 20px; display: grid; gap: 12px; backdrop-filter: blur(6px); }
-  label { display: block; font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); margin-bottom: 6px; }
-  .tabs { display: flex; gap: 4px; border-bottom: 1px solid var(--border); margin: 24px 0 28px; }
-  .tabs button { background: transparent; color: var(--muted); border: 0; border-bottom: 2px solid transparent; padding: 10px 16px; font: inherit; font-size: 13px; font-weight: 500; letter-spacing: 0.04em; cursor: pointer; border-radius: 0; box-shadow: none; }
-  .tabs button:hover { color: var(--fg); background: transparent; filter: none; }
-  .tabs button.active { color: var(--fg); border-bottom-color: var(--accent); }
+  button:active:not(:disabled) { transform: scale(0.99); }
+  button:disabled { opacity: 0.6; cursor: wait; }
+  button.ghost {
+    background: transparent; color: #8b8f96;
+    border: 1px solid #262a30; border-radius: 6px;
+    padding: 7px 12px; font-size: 12px; font-weight: 400;
+    letter-spacing: 0.04em; box-shadow: none;
+  }
+  button.ghost:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); filter: none; }
+  button.ghost.danger { color: #f87171; }
+  button.ghost.danger:hover:not(:disabled) { border-color: #f87171; }
+  .switch { text-align: center; color: #8b8f96; font-size: 13px; margin-top: 14px; }
+  .switch a { cursor: pointer; }
+  .err { color: #f87171; font-size: 13px; margin-top: 8px; }
+  .ok { color: #34d399; font-size: 13px; margin-top: 8px; }
+
+  /* ── tabs ── */
+  .tabs {
+    display: flex; gap: 4px; border-bottom: 1px solid #262a30;
+    margin: 24px 0 28px;
+  }
+  .tabs button {
+    background: transparent; color: #8b8f96; border: 0; border-bottom: 2px solid transparent;
+    padding: 10px 16px; font: inherit; font-size: 13px; font-weight: 500;
+    letter-spacing: 0.04em; cursor: pointer; border-radius: 0; box-shadow: none;
+  }
+  .tabs button:hover:not(:disabled) { color: #e7e7ea; background: transparent; filter: none; }
+  .tabs button.active { color: #e7e7ea; border-bottom-color: var(--accent); }
   section.tab { display: none; }
   section.tab.active { display: block; }
-  .row { display: flex; gap: 12px; align-items: flex-end; flex-wrap: wrap; }
-  .row > div { flex: 1; min-width: 140px; }
-  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; background: rgba(10,11,14,0.6); backdrop-filter: blur(6px); border-radius: 8px; overflow: hidden; }
+
+  /* ── cards / stats ── */
+  .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); gap: 14px; margin-bottom: 20px; }
+  .stat {
+    background: rgba(20,22,26,0.85); border: 1px solid #262a30;
+    border-radius: 12px; padding: 16px 18px;
+    backdrop-filter: blur(6px);
+  }
+  .stat .label { font-size: 11px; letter-spacing: 0.14em; text-transform: uppercase; color: #6b6f76; margin-bottom: 6px; }
+  .stat .value { font-size: 22px; font-family: ui-monospace, monospace; }
+  .stat .value.sm { font-size: 15px; }
+
+  /* ── tables ── */
+  table {
+    width: 100%; border-collapse: collapse;
+    font-family: ui-monospace, monospace; font-size: 12px;
+    background: rgba(10,11,14,0.6); backdrop-filter: blur(6px);
+    border-radius: 8px; overflow: hidden;
+  }
   th, td { padding: 10px 12px; text-align: left; border-bottom: 1px solid #1c1f24; }
-  th { color: var(--dim); font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; background: rgba(20,22,26,0.5); }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: .08em; }
-  .pill.pending{background:#2c2518;color:var(--warn);} .pill.connected{background:#163023;color:var(--ok);}
-  .pill.banned{background:#2c1b1b;color:var(--bad);} .pill.active{background:#163023;color:var(--ok);} .pill.revoked{background:#2c1b1b;color:var(--bad);}
-  .empty { color: var(--dim); font-style: italic; padding: 16px 0; }
-  .err { color: var(--bad); font-size: 13px; margin-top: 8px; }
-  .ok { color: var(--ok); font-size: 13px; margin-top: 8px; }
-  .code-box { margin-top: 16px; padding: 20px; border-radius: 12px; background: rgba(16,36,26,0.75); border: 1px solid #1d4a35; backdrop-filter: blur(6px); }
-  .code-box .label { color: var(--ok); font-size: 11px; letter-spacing: .18em; text-transform: uppercase; margin-bottom: 10px; }
-  .code-box .code { font-family: ui-monospace, monospace; font-size: 26px; letter-spacing: .16em; user-select: all; cursor: pointer; word-break: break-all; }
-  .code-box .hint { color: var(--muted); font-size: 12px; margin-top: 10px; }
-  iframe { width: 100%; height: 70vh; border: 1px solid var(--border); border-radius: 12px; background: #0b0c0f; }
-  .auth-wrap { max-width: 420px; margin: 80px auto 0; }
-  .switch { margin-top: 14px; color: var(--muted); font-size: 13px; text-align: center; }
-  .switch a { cursor: pointer; }
+  th { color: #6b6f76; font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; background: rgba(20,22,26,0.5); }
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: #e7e7ea; }
+  th .arrow { font-size: 9px; opacity: 0.5; margin-left: 4px; }
+  tr.banned td { color: #6b6f76; }
+  tr:hover td { background: rgba(255,255,255,0.02); }
+  .empty { color: #6b6f76; font-style: italic; padding: 16px 0; text-align: center; }
+
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: 0.08em; }
+  .pill.pending   { background: #2c2518; color: #fbbf24; }
+  .pill.connected { background: #163023; color: #34d399; }
+  .pill.banned    { background: #2c1b1b; color: #f87171; }
+  .pill.expired   { background: #1c1f24; color: #8b8f96; }
+  .pill.replaced  { background: #2c1b1b; color: #f87171; }
+  .pill.active    { background: #163023; color: #34d399; }
+  .pill.revoked   { background: #2c1b1b; color: #f87171; }
+
+  /* ── key banner ── */
+  .key-box {
+    margin-bottom: 20px; padding: 18px; border-radius: 12px;
+    background: rgba(16,36,26,0.75); border: 1px solid #1d4a35;
+    backdrop-filter: blur(6px);
+  }
+  .key-box .label { color: #34d399; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 10px; }
+  .key-box .key {
+    font-family: ui-monospace, monospace; font-size: 15px;
+    word-break: break-all; user-select: all; cursor: pointer;
+  }
+  .key-box .hint { color: #8b8f96; font-size: 12px; margin-top: 8px; }
+
+  /* ── filters ── */
+  .filters { display: flex; gap: 10px; align-items: center; margin-bottom: 14px; flex-wrap: wrap; }
+  .filters select { width: auto; padding: 7px 10px; font-size: 13px; }
+  .filters .spacer { flex: 1; }
+
+  /* ── misc ── */
+  iframe { width: 100%; height: 70vh; border: 1px solid #262a30; border-radius: 12px; background: #0b0c0f; }
+  .row-actions { display: flex; gap: 6px; }
+
+  @media (max-width: 640px) {
+    main { padding: 20px 16px; }
+    h1 { font-size: 20px; }
+    .head { flex-wrap: wrap; }
+    .grid-stats { grid-template-columns: 1fr 1fr; }
+    .tabs { overflow-x: auto; flex-wrap: nowrap; -webkit-overflow-scrolling: touch; }
+    .tabs button { flex: 0 0 auto; }
+  }
 </style>
 </head>
 <body>
 
+<!-- ── auth ──────────────────────────────────────────────────────── -->
 <div id="auth" hidden>
   <div class="auth-wrap">
     <h1>bothub <span class="dim">· dashboard</span></h1>
@@ -62,8 +157,8 @@
     <div id="view-register" hidden>
       <p class="lead">Create an account. You'll get API keys and session history inside.</p>
       <form id="registerForm" class="card">
-        <div><label>email</label><input id="regEmail" type="email" autocomplete="email" required></div>
-        <div><label>password (min 8)</label><input id="regPassword" type="password" autocomplete="new-password" required></div>
+        <label>email<input id="regEmail" type="email" autocomplete="email" required></label>
+        <label>password (min 8)<input id="regPassword" type="password" autocomplete="new-password" required></label>
         <button type="submit">create account</button>
         <p id="regError" class="err" hidden></p>
       </form>
@@ -73,8 +168,8 @@
     <div id="view-login" hidden>
       <p class="lead">Log in with your email and password.</p>
       <form id="loginForm" class="card">
-        <div><label>email</label><input id="logEmail" type="email" autocomplete="email" required></div>
-        <div><label>password</label><input id="logPassword" type="password" autocomplete="current-password" required></div>
+        <label>email<input id="logEmail" type="email" autocomplete="email" required></label>
+        <label>password<input id="logPassword" type="password" autocomplete="current-password" required></label>
         <button type="submit">continue</button>
         <p id="logError" class="err" hidden></p>
       </form>
@@ -82,9 +177,9 @@
     </div>
 
     <div id="view-code" hidden>
-      <p class="lead">We sent a 6-digit code to <strong id="codeEmail"></strong>. Enter it to finish logging in.</p>
+      <p class="lead">We sent a 6-digit code to <strong id="codeEmail"></strong>.</p>
       <form id="codeForm" class="card">
-        <div><label>code</label><input id="logCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" required></div>
+        <label>code<input id="logCode" inputmode="numeric" pattern="[0-9]*" maxlength="6" placeholder="000000" required></label>
         <button type="submit">verify</button>
         <p id="codeError" class="err" hidden></p>
         <p id="devCodeHint" class="ok" hidden></p>
@@ -94,11 +189,12 @@
   </div>
 </div>
 
+<!-- ── app ──────────────────────────────────────────────────────── -->
 <div id="app" hidden>
   <main>
-    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+    <div class="head">
       <h1>bothub <span class="dim">· dashboard</span></h1>
-      <div style="display:flex; gap:12px; align-items:center; color:var(--muted); font-size:12px;">
+      <div style="display:flex; gap:12px; align-items:center; color:#8b8f96; font-size:12px;">
         <span id="acctEmail"></span>
         <button class="ghost" id="signOut">sign out</button>
       </div>
@@ -111,40 +207,81 @@
       <button data-tab="docs">docs</button>
     </nav>
 
+    <!-- overview -->
     <section class="tab active" id="tab-overview">
       <h2>Account</h2>
-      <p class="lead">API keys you create below give your bots and sites access to the pairing API.</p>
-      <div id="overviewInfo" style="font-family:ui-monospace,monospace;font-size:13px;color:var(--muted);">—</div>
+      <div class="grid-stats">
+        <div class="stat"><div class="label">email</div><div class="value sm" id="ovEmail">—</div></div>
+        <div class="stat"><div class="label">created</div><div class="value sm" id="ovCreated">—</div></div>
+        <div class="stat"><div class="label">api keys</div><div class="value" id="ovKeys">—</div></div>
+        <div class="stat"><div class="label">sessions</div><div class="value" id="ovSessions">—</div></div>
+        <div class="stat"><div class="label">total sends</div><div class="value" id="ovSends">—</div></div>
+        <div class="stat"><div class="label">active now</div><div class="value" id="ovActive">—</div></div>
+      </div>
     </section>
 
+    <!-- API keys -->
     <section class="tab" id="tab-keys">
-      <h2>Create an API key</h2>
+      <h2>Create a new key</h2>
       <form id="newKeyForm" class="card">
-        <div><label>label</label><input id="newKeyLabel" placeholder="e.g. 'my other bot'" autocomplete="off"></div>
+        <label>label<input id="newKeyLabel" placeholder="e.g. my other bot" autocomplete="off"></label>
         <button type="submit">create key</button>
       </form>
 
-      <div class="code-box" id="newKeyBox" hidden>
+      <div class="key-box" id="newKeyBox" hidden>
         <div class="label">new key — copy it now, shown once</div>
-        <div class="code" id="newKeyValue" title="click to copy">—</div>
+        <div class="key" id="newKeyValue" title="click to copy">—</div>
+        <div class="hint">click the key to copy it</div>
       </div>
 
-      <h2 style="margin-top:28px;">Your keys</h2>
+      <div class="filters">
+        <label style="display:flex;align-items:center;gap:6px;text-transform:none;letter-spacing:0;font-size:12px;color:#8b8f96;">
+          <input type="checkbox" id="showRevoked" style="width:auto;"> show revoked
+        </label>
+        <div class="spacer"></div>
+        <button class="ghost" id="refreshKeys">refresh</button>
+      </div>
+
       <table>
-        <thead><tr><th>prefix</th><th>label</th><th>created</th><th>last used</th><th>uses</th><th>status</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th>prefix</th><th>label</th><th>created</th><th>last used</th><th>uses</th><th>status</th><th></th>
+          </tr>
+        </thead>
         <tbody id="keysTable"><tr><td colspan="7" class="empty">loading…</td></tr></tbody>
       </table>
     </section>
 
+    <!-- sessions -->
     <section class="tab" id="tab-sessions">
       <h2>Sessions</h2>
-      <p class="lead">Pairing sessions created through your keys. Each session is tied to the phone that paired.</p>
+      <div class="filters">
+        <select id="sessionFilter">
+          <option value="all">all</option>
+          <option value="connected">connected</option>
+          <option value="pending">pending</option>
+          <option value="banned">banned</option>
+          <option value="expired">expired</option>
+        </select>
+        <div class="spacer"></div>
+        <button class="ghost" id="refreshSessions">refresh</button>
+      </div>
       <table>
-        <thead><tr><th>phone</th><th>level</th><th>status</th><th>sends</th><th>created</th><th></th></tr></thead>
+        <thead>
+          <tr>
+            <th class="sortable" data-sort="number">phone<span class="arrow" data-arrow="number"></span></th>
+            <th class="sortable" data-sort="level">level<span class="arrow" data-arrow="level"></span></th>
+            <th class="sortable" data-sort="status">status<span class="arrow" data-arrow="status"></span></th>
+            <th class="sortable" data-sort="sends">sends<span class="arrow" data-arrow="sends"></span></th>
+            <th class="sortable" data-sort="createdAt">created<span class="arrow" data-arrow="createdAt"></span></th>
+            <th></th>
+          </tr>
+        </thead>
         <tbody id="sessionsTable"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
       </table>
     </section>
 
+    <!-- docs -->
     <section class="tab" id="tab-docs">
       <h2>API docs</h2>
       <p class="lead">Same reference as <a href="/docs" target="_blank">/docs</a>.</p>
@@ -157,13 +294,16 @@
   const $ = (id) => document.getElementById(id);
   const SESSION_KEY = 'bothub.session_token';
   let poll = null;
+  let sessionsCache = [];
+  let sortKey = 'createdAt';
+  let sortDir = 'desc';
 
-  function getSession() { return localStorage.getItem(SESSION_KEY) || ''; }
-  function setSession(t) { localStorage.setItem(SESSION_KEY, t); }
-  function clearSession() { localStorage.removeItem(SESSION_KEY); }
+  const getSession = () => localStorage.getItem(SESSION_KEY) || '';
+  const setSession = (t) => localStorage.setItem(SESSION_KEY, t);
+  const clearSession = () => localStorage.removeItem(SESSION_KEY);
 
   function showView(name) {
-    ['register', 'login', 'code'].forEach(v => $('view-' + v).hidden = v !== name);
+    ['register','login','code'].forEach((v) => $('view-' + v).hidden = v !== name);
   }
 
   async function api(path, opts = {}, { session = true } = {}) {
@@ -175,6 +315,7 @@
     return data;
   }
 
+  // ── auth ──
   $('registerForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     $('regError').hidden = true;
@@ -185,10 +326,7 @@
       $('logEmail').value = email;
       $('logPassword').value = '';
       showView('login');
-    } catch (err) {
-      $('regError').textContent = err.message;
-      $('regError').hidden = false;
-    }
+    } catch (err) { $('regError').textContent = err.message; $('regError').hidden = false; }
   });
 
   $('loginForm').addEventListener('submit', async (e) => {
@@ -200,17 +338,11 @@
       const r = await api('/api/auth/login', { method: 'POST', body: JSON.stringify({ email, password }) }, { session: false });
       window._pendingToken = r.pendingToken;
       $('codeEmail').textContent = email;
-      showView('code');
       $('logCode').value = '';
       $('devCodeHint').hidden = true;
-      if (r.devCode) {
-        $('devCodeHint').textContent = 'dev mode — code is ' + r.devCode;
-        $('devCodeHint').hidden = false;
-      }
-    } catch (err) {
-      $('logError').textContent = err.message;
-      $('logError').hidden = false;
-    }
+      if (r.devCode) { $('devCodeHint').textContent = 'dev mode — code is ' + r.devCode; $('devCodeHint').hidden = false; }
+      showView('code');
+    } catch (err) { $('logError').textContent = err.message; $('logError').hidden = false; }
   });
 
   $('codeForm').addEventListener('submit', async (e) => {
@@ -224,10 +356,7 @@
       }, { session: false });
       setSession(r.sessionToken);
       startApp();
-    } catch (err) {
-      $('codeError').textContent = err.message;
-      $('codeError').hidden = false;
-    }
+    } catch (err) { $('codeError').textContent = err.message; $('codeError').hidden = false; }
   });
 
   $('toLogin').addEventListener('click', () => showView('login'));
@@ -243,48 +372,69 @@
     showView('login');
   });
 
-  document.querySelectorAll('.tabs button').forEach(b => {
+  // ── tabs ──
+  document.querySelectorAll('.tabs button').forEach((b) => {
     b.addEventListener('click', () => {
-      document.querySelectorAll('.tabs button').forEach(x => x.classList.remove('active'));
-      document.querySelectorAll('section.tab').forEach(x => x.classList.remove('active'));
+      document.querySelectorAll('.tabs button').forEach((x) => x.classList.remove('active'));
+      document.querySelectorAll('section.tab').forEach((x) => x.classList.remove('active'));
       b.classList.add('active');
       $('tab-' + b.dataset.tab).classList.add('active');
     });
   });
 
+  // ── overview ──
   async function loadOverview() {
     try {
       const me = await api('/api/auth/me');
       $('acctEmail').textContent = me.email;
-      $('overviewInfo').innerHTML =
-        `email: ${me.email}<br>account id: ${me.id}<br>created: ${(me.created || '').slice(0, 19).replace('T', ' ')}`;
+      $('ovEmail').textContent = me.email;
+      $('ovCreated').textContent = (me.created || '').slice(0, 10);
+      const [keys, sessions] = await Promise.all([
+        api('/api/account/keys').catch(() => []),
+        api('/api/account/sessions').catch(() => []),
+      ]);
+      const active = sessions.filter((s) => ['connected','pending'].includes(s.status)).length;
+      $('ovKeys').textContent = keys.length;
+      $('ovSessions').textContent = sessions.length;
+      $('ovSends').textContent = sessions.reduce((a, s) => a + (s.sends || 0), 0);
+      $('ovActive').textContent = active;
     } catch (err) {
-      if (err.message.includes('session')) { $('signOut').click(); }
+      if (err.message.includes('session')) $('signOut').click();
     }
   }
 
+  // ── keys ──
   async function loadKeys() {
     try {
       const list = await api('/api/account/keys');
+      const showRevoked = $('showRevoked').checked;
+      const filtered = showRevoked ? list : list.filter((k) => !k.revoked);
       const tb = $('keysTable');
-      if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">no keys yet</td></tr>'; return; }
-      tb.innerHTML = list.map(k => `
-        <tr style="${k.revoked ? 'color:var(--dim);text-decoration:line-through;' : ''}">
+      if (!filtered.length) {
+        tb.innerHTML = '<tr><td colspan="7" class="empty">no keys yet</td></tr>';
+        return;
+      }
+      tb.innerHTML = filtered.map((k) => `
+        <tr style="${k.revoked ? 'color:#6b6f76;text-decoration:line-through;' : ''}">
           <td>${k.prefix}</td>
           <td>${k.label}</td>
-          <td>${(k.created || '').slice(0, 19).replace('T', ' ')}</td>
-          <td>${(k.lastUsed || '').slice(0, 19).replace('T', ' ') || '—'}</td>
+          <td>${(k.created || '').slice(0, 16).replace('T', ' ')}</td>
+          <td>${(k.lastUsed || '').slice(0, 16).replace('T', ' ') || '—'}</td>
           <td>${k.uses || 0}</td>
           <td><span class="pill ${k.revoked ? 'revoked' : 'active'}">${k.revoked ? 'revoked' : 'active'}</span></td>
-          <td>${k.revoked ? '' : `<button class="ghost danger" data-id="${k.id}">revoke</button>`}</td>
+          <td class="row-actions">
+            <button class="ghost" data-copy="${k.key}">copy</button>
+            ${k.revoked ? '' : `<button class="ghost danger" data-revoke="${k.id}">revoke</button>`}
+          </td>
         </tr>`).join('');
-      tb.querySelectorAll('button[data-id]').forEach(b => {
-        b.addEventListener('click', async () => {
-          if (!confirm('Revoke this key? Any bot using it will stop working.')) return;
-          try { await api('/api/account/keys/revoke', { method: 'POST', body: JSON.stringify({ id: b.dataset.id }) }); } catch {}
-          loadKeys();
-        });
-      });
+      tb.querySelectorAll('button[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1200); } catch {}
+      }));
+      tb.querySelectorAll('button[data-revoke]').forEach((b) => b.addEventListener('click', async () => {
+        if (!confirm('Revoke this key? Any bot using it will stop working.')) return;
+        try { await api('/api/account/keys/revoke', { method: 'POST', body: JSON.stringify({ id: b.dataset.revoke }) }); } catch {}
+        loadKeys(); loadOverview();
+      }));
     } catch {}
   }
 
@@ -296,45 +446,85 @@
       $('newKeyBox').hidden = false;
       $('newKeyValue').textContent = r.key;
       $('newKeyLabel').value = '';
-      loadKeys();
+      loadKeys(); loadOverview();
     } catch (err) { alert(err.message); }
   });
+
   $('newKeyValue').addEventListener('click', async () => {
     const v = $('newKeyValue').textContent;
-    if (v && v !== '—') { try { await navigator.clipboard.writeText(v); } catch {} }
+    if (v && v !== '—') {
+      try { await navigator.clipboard.writeText(v); $('newKeyValue').style.opacity = '0.5'; setTimeout(() => $('newKeyValue').style.opacity = '1', 300); } catch {}
+    }
   });
 
+  $('showRevoked').addEventListener('change', loadKeys);
+  $('refreshKeys').addEventListener('click', loadKeys);
+
+  // ── sessions ──
   async function loadSessions() {
     try {
       const list = await api('/api/account/sessions');
-      if (list.length && window.bothubMarkSession) window.bothubMarkSession();
+      sessionsCache = list;
+
+      const filter = $('sessionFilter').value;
+      let filtered = filter === 'all' ? list : list.filter((s) => s.status === filter);
+      filtered = [...filtered].sort((a, b) => {
+        const av = a[sortKey] ?? '';
+        const bv = b[sortKey] ?? '';
+        const cmp = typeof av === 'number' && typeof bv === 'number' ? av - bv : String(av).localeCompare(String(bv));
+        return sortDir === 'asc' ? cmp : -cmp;
+      });
+
       const tb = $('sessionsTable');
-      if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">no sessions yet</td></tr>'; return; }
-      tb.innerHTML = list.map(s => `
-        <tr class="${s.status === 'banned' ? 'banned' : ''}" style="${s.status === 'banned' ? 'color:var(--dim);' : ''}">
+      if (!filtered.length) {
+        tb.innerHTML = `<tr><td colspan="6" class="empty">${filter === 'all' ? 'no sessions yet' : 'no ' + filter + ' sessions'}</td></tr>`;
+        return;
+      }
+      tb.innerHTML = filtered.map((s) => `
+        <tr class="${s.status === 'banned' ? 'banned' : ''}">
           <td>${s.number}</td>
           <td>${s.level}</td>
           <td><span class="pill ${s.status}">${s.status}</span></td>
           <td>${s.sends || 0}</td>
-          <td>${(s.createdAt || '').slice(0, 19).replace('T', ' ')}</td>
-          <td>${s.status !== 'banned' ? `<button class="ghost danger" data-phone="${s.number}">end</button>` : ''}</td>
+          <td>${(s.createdAt || '').slice(0, 16).replace('T', ' ')}</td>
+          <td class="row-actions">
+            ${['connected','pending'].includes(s.status) ? `<button class="ghost danger" data-end="${s.number}">end</button>` : ''}
+          </td>
         </tr>`).join('');
-      tb.querySelectorAll('button[data-phone]').forEach(b => {
-        b.addEventListener('click', async () => {
-          if (!confirm('End session for ' + b.dataset.phone + '?')) return;
-          try { await api('/api/account/sessions/end', { method: 'POST', body: JSON.stringify({ phone: b.dataset.phone }) }); } catch {}
-          loadSessions();
-        });
+      tb.querySelectorAll('button[data-end]').forEach((b) => b.addEventListener('click', async () => {
+        if (!confirm('End session for ' + b.dataset.end + '?')) return;
+        try { await api('/api/account/sessions/end', { method: 'POST', body: JSON.stringify({ phone: b.dataset.end }) }); } catch {}
+        loadSessions(); loadOverview();
+      }));
+
+      // sort arrows
+      document.querySelectorAll('.tabs th.sortable').forEach((th) => {
+        const arrow = th.querySelector('.arrow');
+        if (!arrow) return;
+        if (th.dataset.sort === sortKey) arrow.textContent = sortDir === 'asc' ? '▲' : '▼';
+        else arrow.textContent = '';
       });
     } catch {}
   }
 
+  document.querySelectorAll('th.sortable').forEach((th) => {
+    th.addEventListener('click', () => {
+      const k = th.dataset.sort;
+      if (sortKey === k) sortDir = sortDir === 'asc' ? 'desc' : 'asc';
+      else { sortKey = k; sortDir = 'asc'; }
+      loadSessions();
+    });
+  });
+  $('sessionFilter').addEventListener('change', loadSessions);
+  $('refreshSessions').addEventListener('click', loadSessions);
+
+  // ── boot ──
   function startApp() {
     $('auth').hidden = true;
     $('app').hidden = false;
     loadOverview(); loadKeys(); loadSessions();
     if (poll) clearInterval(poll);
-    poll = setInterval(() => { loadKeys(); loadSessions(); }, 4000);
+    poll = setInterval(() => { loadOverview(); loadSessions(); }, 5000);
   }
 
   (async () => {

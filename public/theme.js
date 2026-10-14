@@ -1,10 +1,9 @@
-// public/theme.js — themes + music + settings + cursor. Desktop and mobile.
+// public/theme.js — themes + music + cursor + settings. Generated backgrounds only.
 //   <script src="/theme.js" data-scope="pairing"></script>
 //   <script src="/theme.js" data-scope="dashboard"></script>
 //   <script src="/theme.js" data-scope="admin"></script>
 // Pure client-side. No reload, no fetch on the pairing flow, no socket touch.
 (function () {
-  const IMG = (f) => `url('/bg/${f}')`;
   const SVG = (s) => `url('data:image/svg+xml;utf8,${encodeURIComponent(s)}')`;
 
   const NEBULA = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="a" cx="30%" cy="30%" r="70%"><stop offset="0%" stop-color="#7c5cff"/><stop offset="60%" stop-color="#1a1a3a"/><stop offset="100%" stop-color="#05060a"/></radialGradient><radialGradient id="b" cx="70%" cy="70%" r="60%"><stop offset="0%" stop-color="#22d3ee" stop-opacity="0.8"/><stop offset="100%" stop-color="#05060a" stop-opacity="0"/></radialGradient></defs><rect width="600" height="600" fill="url(#a)"/><circle cx="420" cy="420" r="300" fill="url(#b)"/></svg>';
@@ -19,6 +18,7 @@
   const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const HAS_FINE_POINTER = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
+  // ── canvas animation engines ──
   function matrixEngine(canvas, ctx, accent) {
     const CHARS = 'アイウエオカキクケコサシスセソタチツテトナニヌネノ0123456789'.split('');
     const FS = 16; let cols, drops, raf, w, h;
@@ -34,7 +34,8 @@
       }
       if (!REDUCED) raf = requestAnimationFrame(frame);
     }
-    frame(); return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+    frame();
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }
   function particlesEngine(canvas, ctx, accent) {
     let parts = [], w, h, raf;
@@ -50,7 +51,8 @@
       }
       if (!REDUCED) raf = requestAnimationFrame(frame);
     }
-    frame(); return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+    frame();
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }
   function starfieldEngine(canvas, ctx, accent) {
     let stars = [], w, h, raf;
@@ -60,34 +62,27 @@
       ctx.fillStyle = 'rgba(5,6,8,0.35)'; ctx.fillRect(0, 0, w, h); ctx.fillStyle = accent;
       for (const s of stars) {
         s.z -= 4; if (s.z <= 0) { s.x = Math.random() * w - w / 2; s.y = Math.random() * h - h / 2; s.z = w; }
-        const k = 128 / s.z; const px = s.x * k + w / 2, py = s.y * k + h / 2; const r = Math.max(0.3, (1 - s.z / w) * 2);
+        const k = 128 / s.z; const px = s.x * k + w / 2, py = s.y * k + h / 2;
+        const r = Math.max(0.3, (1 - s.z / w) * 2);
         ctx.fillRect(px, py, r, r);
       }
       if (!REDUCED) raf = requestAnimationFrame(frame);
     }
-    frame(); return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+    frame();
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }
   const ENGINES = { matrix: matrixEngine, particles: particlesEngine, starfield: starfieldEngine };
 
   const BUILTINS = [
-    { kind: 'img',  name: 'solo',       src: IMG('01.jpeg'), accent: '#7c5cff', glow: '124,92,255' },
-    { kind: 'img',  name: 'sword',      src: IMG('02.jpeg'), accent: '#38bdf8', glow: '56,189,248' },
-    { kind: 'img',  name: 'meta',       src: IMG('03.jpeg'), accent: '#0866ff', glow: '8,102,255'  },
-    { kind: 'img',  name: 'pepe',       src: IMG('04.jpeg'), accent: '#86c06c', glow: '134,192,108' },
-    { kind: 'img',  name: 'isagi',      src: IMG('05.jpeg'), accent: '#22d3ee', glow: '34,211,238' },
-    { kind: 'img',  name: 'heartbreak', src: IMG('06.jpeg'), accent: '#e879f9', glow: '232,121,249' },
-    { kind: 'img',  name: 'restricted', src: IMG('07.jpeg'), accent: '#f59e0b', glow: '245,158,11' },
-    { kind: 'img',  name: 'banned',     src: IMG('08.jpeg'), accent: '#e11d48', glow: '225,29,72'  },
-    { kind: 'svg',  name: 'nebula',     src: SVG(NEBULA), accent: '#a78bfa', glow: '167,139,250' },
-    { kind: 'svg',  name: 'grid',       src: SVG(GRID),   accent: '#22d3ee', glow: '34,211,238'  },
-    { kind: 'svg',  name: 'waves',      src: SVG(WAVES),  accent: '#38bdf8', glow: '56,189,248'  },
-    { kind: 'svg',  name: 'digits',     src: SVG(DIGITS), accent: '#34d399', glow: '52,211,153'  },
-    { kind: 'anim', name: 'matrix',     engine: 'matrix',    accent: '#34d399', glow: '52,211,153'  },
-    { kind: 'anim', name: 'particles',  engine: 'particles', accent: '#60a5fa', glow: '96,165,250'  },
-    { kind: 'anim', name: 'starfield',  engine: 'starfield', accent: '#e7e7ea', glow: '231,231,234' },
+    { kind: 'svg',  name: 'nebula',    src: SVG(NEBULA), accent: '#a78bfa', glow: '167,139,250' },
+    { kind: 'svg',  name: 'grid',      src: SVG(GRID),   accent: '#22d3ee', glow: '34,211,238'  },
+    { kind: 'svg',  name: 'waves',     src: SVG(WAVES),  accent: '#38bdf8', glow: '56,189,248'  },
+    { kind: 'svg',  name: 'digits',    src: SVG(DIGITS), accent: '#34d399', glow: '52,211,153'  },
+    { kind: 'anim', name: 'matrix',    engine: 'matrix',    accent: '#34d399', glow: '52,211,153'  },
+    { kind: 'anim', name: 'particles', engine: 'particles', accent: '#60a5fa', glow: '96,165,250'  },
+    { kind: 'anim', name: 'starfield', engine: 'starfield', accent: '#e7e7ea', glow: '231,231,234' },
   ];
-  const PUBLIC_SET_NAMES   = ['solo','sword','meta','pepe','isagi','nebula','grid','waves','digits','matrix','particles','starfield'];
-  const REACTIVE_SET_NAMES = ['heartbreak','restricted','banned'];
+  const ALL_NAMES = BUILTINS.map((t) => t.name);
   const ROTATE_MS = 22000;
   const SERVER_TRACKS = ['track1.mp3','track2.mp3','track3.mp3','track4.mp3'];
 
@@ -96,8 +91,8 @@
   const SETTINGS_KEY = 'bothub.theme_settings:' + SCOPE;
 
   const DEFAULTS = {
-    themeKey: 'solo', blur: 48, opacity: 0.9,
-    autoRotate: !REDUCED, includeGenerated: true,
+    themeKey: 'nebula', blur: 48, opacity: 0.9,
+    autoRotate: !REDUCED, enableAnim: true,
     musicOn: false, musicVol: 0.35, musicTrack: '',
     cursor: 'auto',
   };
@@ -109,25 +104,24 @@
     if (vp && !vp.content.includes('viewport-fit')) vp.content = vp.content + ', viewport-fit=cover';
   } catch {}
 
-  let CUSTOM = []; let DISABLED = new Set();
+  let CUSTOM = [];
+  let DISABLED = new Set();
 
   function mergedThemes() {
     const builtins = BUILTINS.filter((t) => !DISABLED.has(t.name));
-    const custom = CUSTOM.map((c) => ({ kind: c.kind || 'img', name: c.name, src: c.src, accent: c.accent || '#7c5cff', glow: c.glow || '124,92,255', customId: c.id }));
+    const custom = CUSTOM.map((c) => ({
+      kind: c.kind || 'img', name: c.name, src: c.src,
+      accent: c.accent || '#7c5cff', glow: c.glow || '124,92,255', customId: c.id,
+    }));
     return [...builtins, ...custom];
   }
   function allowedNames(themes) {
-    const baseSet = (SCOPE === 'pairing' || SCOPE === 'public')
-      ? new Set(PUBLIC_SET_NAMES)
-      : (localStorage.getItem('bothub.has_session') === '1'
-          ? new Set([...PUBLIC_SET_NAMES, ...REACTIVE_SET_NAMES])
-          : new Set(PUBLIC_SET_NAMES));
     return themes
-      .filter((t) => baseSet.has(t.name) || t.customId)
-      .filter((t) => settings.includeGenerated ? true : t.kind === 'img')
+      .filter((t) => settings.enableAnim ? true : t.kind !== 'anim')
       .map((t) => t.name);
   }
 
+  // ── IndexedDB for user mp3s ──
   function openMusicDB() {
     return new Promise((res, rej) => {
       const req = indexedDB.open('bothub-music', 1);
@@ -159,16 +153,15 @@
     });
   }
 
+  // ── stylesheet ──
   const style = document.createElement('style');
   style.textContent = `
     :root { --accent: #3b82f6; --glow: 59,130,246; }
     * { -webkit-tap-highlight-color: transparent; }
     html, body { overflow-x: hidden; }
 
-    /* ── interactive elements get the hand by default ── */
     a, button, [role="button"], input[type=submit], select, label { cursor: pointer; }
 
-    /* ── cursor modes ── */
     body[data-cursor="crosshair"], body[data-cursor="crosshair"] a, body[data-cursor="crosshair"] button,
     body[data-cursor="crosshair"] input, body[data-cursor="crosshair"] select, body[data-cursor="crosshair"] label { cursor: crosshair; }
     body[data-cursor="cell"], body[data-cursor="cell"] a, body[data-cursor="cell"] button,
@@ -176,7 +169,6 @@
     body[data-cursor="pointer"], body[data-cursor="pointer"] * { cursor: pointer; }
     body[data-cursor="none"], body[data-cursor="none"] * { cursor: none !important; }
 
-    /* ── glowing dot (custom cursor) ── */
     #bh-dot {
       position: fixed; top: 0; left: 0;
       width: 14px; height: 14px; border-radius: 50%;
@@ -186,27 +178,13 @@
       pointer-events: none; z-index: 999999;
       transform: translate3d(-200px, -200px, 0);
       transition: width .12s ease, height .12s ease, margin .12s ease, background .12s ease, border-color .12s ease, opacity .2s ease;
-      display: none;
-      will-change: transform;
+      display: none; will-change: transform;
     }
     body[data-cursor="none"] #bh-dot { display: block; }
-    #bh-dot.hover {
-      width: 34px; height: 34px; margin-left: -17px; margin-top: -17px;
-      background: transparent; border: 1.5px solid var(--accent);
-      box-shadow: 0 0 24px 6px rgba(var(--glow), 0.45);
-    }
+    #bh-dot.hover { width: 34px; height: 34px; margin-left: -17px; margin-top: -17px; background: transparent; border: 1.5px solid var(--accent); box-shadow: 0 0 24px 6px rgba(var(--glow), 0.45); }
     #bh-dot.down { width: 10px; height: 10px; margin-left: -5px; margin-top: -5px; }
 
-    #bh-bg, #bh-bg-next {
-      position: fixed; inset: -80px; z-index: -2;
-      background-size: cover; background-position: center;
-      filter: blur(var(--bh-blur, 48px)) saturate(1.35);
-      transform: scale(1.15);
-      transition: opacity 1s ease, filter .2s ease;
-      pointer-events: none; will-change: opacity;
-    }
-    #bh-bg { opacity: var(--bh-opacity, 0.9); }
-    #bh-bg-next { opacity: 0; }
+    #bh-bg { position: fixed; inset: -80px; z-index: -2; background-size: cover; background-position: center; filter: blur(var(--bh-blur, 48px)) saturate(1.35); transform: scale(1.15); transition: opacity 1s ease, filter .2s ease; pointer-events: none; opacity: var(--bh-opacity, 0.9); }
     #bh-canvas { position: fixed; inset: 0; z-index: -2; display: none; pointer-events: none; opacity: var(--bh-opacity, 0.9); }
     #bh-bg-overlay { position: fixed; inset: 0; z-index: -1; pointer-events: none; background: radial-gradient(120% 100% at 50% 0%, rgba(0,0,0,0.05) 0%, rgba(5,6,8,0.45) 55%, rgba(5,6,8,0.75) 100%); }
 
@@ -239,7 +217,7 @@
     #bh-panel .toggles { display: grid; gap: 8px; font-size: 12px; color: #b8bcc4; }
     #bh-panel .toggles label { display: flex; align-items: center; gap: 8px; cursor: pointer; }
     #bh-panel .toggles input { accent-color: var(--accent); width: 16px; height: 16px; }
-    #bh-panel select, #bh-panel input[type=file] { width: 100%; background: #14161a; color: #e7e7ea; border: 1px solid #262a30; border-radius: 6px; padding: 10px 10px; font: inherit; font-size: 14px; outline: none; cursor: pointer; }
+    #bh-panel select, #bh-panel input[type=file] { width: 100%; background: #14161a; color: #e7e7ea; border: 1px solid #262a30; border-radius: 6px; padding: 10px; font: inherit; font-size: 14px; outline: none; cursor: pointer; }
     #bh-panel select:focus { border-color: var(--accent); }
     #bh-panel .row { display: flex; gap: 6px; margin-top: 8px; }
     #bh-panel .row button { flex: 1; background: transparent; color: #8b8f96; border: 1px solid #262a30; border-radius: 6px; padding: 10px; font-size: 11px; letter-spacing: .08em; text-transform: uppercase; cursor: pointer; font-family: inherit; }
@@ -251,15 +229,11 @@
     #bh-panel .reset:hover { color: #f87171; border-color: #f87171; }
     body { background: #06070a; }
 
-    @media (max-width: 900px) {
-      th, td { padding: 7px 9px; }
-      #bh-panel { width: 340px; }
-    }
+    @media (max-width: 900px) { th, td { padding: 7px 9px; } #bh-panel { width: 340px; } }
     @media (max-width: 640px) {
       body { padding: 16px; }
       main { padding: 16px !important; max-width: 100% !important; }
-      h1 { font-size: 20px; }
-      h1 .dim { font-size: 16px; }
+      h1 { font-size: 20px; } h1 .dim { font-size: 16px; }
       header, .head, .top { flex-wrap: wrap; gap: 8px; }
       header button, .head a.cta, .top button { font-size: 11px; padding: 4px 10px; }
       table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; border-radius: 8px; }
@@ -279,14 +253,14 @@
     @media (min-width: 1440px) { #bh-panel { width: 400px; } }
     @media (prefers-reduced-motion: reduce) {
       #bh-music-btn .disc { animation: none; }
-      #bh-bg, #bh-bg-next { transition: none; }
+      #bh-bg { transition: none; }
       #bh-panel, #bh-theme-chip, #bh-music-btn, #bh-settings-btn, #bh-dot { transition: none; }
     }
   `;
   document.head.appendChild(style);
 
+  // ── DOM ──
   const bg = document.createElement('div'); bg.id = 'bh-bg';
-  const bgNext = document.createElement('div'); bgNext.id = 'bh-bg-next';
   const canvas = document.createElement('canvas'); canvas.id = 'bh-canvas';
   const overlay = document.createElement('div'); overlay.id = 'bh-bg-overlay';
   const dot = document.createElement('div'); dot.id = 'bh-dot';
@@ -324,7 +298,7 @@
     <div class="section">
       <div class="toggles">
         <label><input type="checkbox" id="bh-rotate"> auto-rotate (22s)</label>
-        <label><input type="checkbox" id="bh-gen"> include generated themes</label>
+        <label><input type="checkbox" id="bh-anim"> enable animated themes</label>
       </div>
     </div>
     <div class="divider"></div>
@@ -357,7 +331,6 @@
     for (const u of userTracks) opts.push({ id: u.id, label: '⭐ ' + u.name });
     return opts;
   }
-
   async function detectServerTracks() {
     const out = [];
     for (const name of SERVER_TRACKS) {
@@ -365,7 +338,6 @@
     }
     return out;
   }
-
   function refreshTrackSelect() {
     const sel = panel.querySelector('#bh-music-track');
     const opts = trackOptions();
@@ -383,7 +355,6 @@
     applyTrackSrc();
     panel.querySelector('#bh-music-hint').textContent = 'imported tracks stay in this browser only';
   }
-
   async function applyTrackSrc() {
     const id = settings.musicTrack;
     if (!id) return;
@@ -400,19 +371,14 @@
     audio.volume = settings.musicVol;
   }
 
-  // ── custom cursor dot ──
   function bindCursorDot() {
     if (!HAS_FINE_POINTER) return;
-    let lastX = -200, lastY = -200;
-    let pending = false;
+    let lastX = -200, lastY = -200, pending = false;
     document.addEventListener('mousemove', (e) => {
       lastX = e.clientX; lastY = e.clientY;
       if (pending) return;
       pending = true;
-      requestAnimationFrame(() => {
-        dot.style.transform = `translate3d(${lastX}px, ${lastY}px, 0)`;
-        pending = false;
-      });
+      requestAnimationFrame(() => { dot.style.transform = `translate3d(${lastX}px, ${lastY}px, 0)`; pending = false; });
     }, { passive: true });
     document.addEventListener('mouseleave', () => { dot.style.opacity = '0'; });
     document.addEventListener('mouseenter', () => { dot.style.opacity = '1'; });
@@ -425,19 +391,15 @@
     document.addEventListener('mousedown', () => dot.classList.add('down'));
     document.addEventListener('mouseup', () => dot.classList.remove('down'));
   }
-
   function applyCursor() {
-    document.body.dataset.cursor = settings.cursor || 'auto';
-    // If we're on touch only, force default (a dot cursor on touch is meaningless).
-    if (!HAS_FINE_POINTER) document.body.dataset.cursor = 'auto';
+    document.body.dataset.cursor = HAS_FINE_POINTER ? (settings.cursor || 'auto') : 'auto';
   }
 
   function inject() {
     if (!document.body || document.getElementById('bh-bg')) return;
     document.body.insertBefore(overlay, document.body.firstChild);
     document.body.insertBefore(canvas, overlay);
-    document.body.insertBefore(bgNext, canvas);
-    document.body.insertBefore(bg, bgNext);
+    document.body.insertBefore(bg, canvas);
     document.body.appendChild(tools);
     document.body.appendChild(panel);
     document.body.appendChild(dot);
@@ -463,9 +425,7 @@
       b.title = t.name;
       if (t.name === settings.themeKey) b.classList.add('active');
       b.addEventListener('click', () => {
-        settings.themeKey = t.name;
-        applyByName(t.name);
-        saveSettings();
+        settings.themeKey = t.name; applyByName(t.name); saveSettings();
         g.querySelectorAll('button').forEach((x) => x.classList.remove('active'));
         b.classList.add('active');
       });
@@ -477,14 +437,14 @@
     const blurEl = panel.querySelector('#bh-blur');
     const opEl = panel.querySelector('#bh-opacity');
     const rotEl = panel.querySelector('#bh-rotate');
-    const genEl = panel.querySelector('#bh-gen');
+    const animEl = panel.querySelector('#bh-anim');
     const cursorEl = panel.querySelector('#bh-cursor');
     const musicOnEl = panel.querySelector('#bh-music-on');
     const volEl = panel.querySelector('#bh-vol');
     const fileEl = panel.querySelector('#bh-music-file');
 
     blurEl.value = settings.blur; opEl.value = Math.round(settings.opacity * 100);
-    rotEl.checked = settings.autoRotate; genEl.checked = settings.includeGenerated;
+    rotEl.checked = settings.autoRotate; animEl.checked = settings.enableAnim;
     cursorEl.value = settings.cursor || 'auto';
     musicOnEl.checked = settings.musicOn; volEl.value = Math.round(settings.musicVol * 100);
     panel.querySelector('#bh-blur-val').textContent = settings.blur + 'px';
@@ -494,7 +454,14 @@
     blurEl.addEventListener('input', () => { settings.blur = parseInt(blurEl.value, 10); document.documentElement.style.setProperty('--bh-blur', settings.blur + 'px'); panel.querySelector('#bh-blur-val').textContent = settings.blur + 'px'; saveSettings(); });
     opEl.addEventListener('input', () => { settings.opacity = parseInt(opEl.value, 10) / 100; document.documentElement.style.setProperty('--bh-opacity', String(settings.opacity)); panel.querySelector('#bh-opacity-val').textContent = Math.round(settings.opacity * 100) + '%'; saveSettings(); });
     rotEl.addEventListener('change', () => { settings.autoRotate = rotEl.checked; saveSettings(); if (settings.autoRotate) scheduleRotate(); else if (timer) { clearTimeout(timer); timer = null; } });
-    genEl.addEventListener('change', () => { settings.includeGenerated = genEl.checked; saveSettings(); buildGrid(); });
+    animEl.addEventListener('change', () => {
+      settings.enableAnim = animEl.checked; saveSettings();
+      buildGrid();
+      if (!allowedNames(mergedThemes()).includes(settings.themeKey)) {
+        settings.themeKey = allowedNames(mergedThemes())[0];
+        applyByName(settings.themeKey);
+      }
+    });
     cursorEl.addEventListener('change', () => { settings.cursor = cursorEl.value; saveSettings(); applyCursor(); });
     volEl.addEventListener('input', () => { settings.musicVol = parseInt(volEl.value, 10) / 100; audio.volume = settings.musicVol; panel.querySelector('#bh-vol-val').textContent = Math.round(settings.musicVol * 100) + '%'; saveSettings(); });
     musicOnEl.addEventListener('change', () => { settings.musicOn = musicOnEl.checked; saveSettings(); if (settings.musicOn) tryStartMusic(); else { audio.pause(); musicStarted = false; } });
@@ -521,13 +488,12 @@
       settings.musicTrack = ''; saveSettings();
       refreshTrackSelect();
     });
-
     panel.querySelector('#bh-reset').addEventListener('click', () => {
       Object.assign(settings, DEFAULTS); saveSettings();
       document.documentElement.style.removeProperty('--bh-blur');
       document.documentElement.style.removeProperty('--bh-opacity');
       blurEl.value = settings.blur; opEl.value = Math.round(settings.opacity * 100);
-      rotEl.checked = settings.autoRotate; genEl.checked = settings.includeGenerated;
+      rotEl.checked = settings.autoRotate; animEl.checked = settings.enableAnim;
       cursorEl.value = settings.cursor;
       musicOnEl.checked = settings.musicOn; volEl.value = Math.round(settings.musicVol * 100);
       panel.querySelector('#bh-blur-val').textContent = settings.blur + 'px';
@@ -546,7 +512,10 @@
   }
 
   async function loadAll() {
-    try { const r = await fetch('/api/themes'); if (r.ok) { const d = await r.json(); CUSTOM = d.custom || []; DISABLED = new Set(d.disabled || []); } } catch {}
+    try {
+      const r = await fetch('/api/themes');
+      if (r.ok) { const d = await r.json(); CUSTOM = d.custom || []; DISABLED = new Set(d.disabled || []); }
+    } catch {}
     buildGrid();
     serverTracks = await detectServerTracks();
     try { userTracks = await listUserTracks(); } catch { userTracks = []; }
@@ -560,7 +529,6 @@
     if (musicStarted || !settings.musicOn || !settings.musicTrack) return;
     audio.play().then(() => { musicStarted = true; }).catch(() => {});
   }
-
   musicBtn.addEventListener('click', () => {
     if (!settings.musicTrack) return;
     if (audio.paused) {
@@ -573,7 +541,6 @@
       audio.pause(); musicStarted = false;
     }
   });
-
   const unlock = () => { if (settings.musicOn) tryStartMusic(); };
   document.addEventListener('click', unlock);
   document.addEventListener('keydown', unlock);
@@ -584,9 +551,9 @@
 
   function applyByName(name) {
     const themes = mergedThemes();
-    const allowedSet = new Set(allowedNames(themes));
-    let t = themes.find((x) => x.name === name && allowedSet.has(x.name));
-    if (!t) t = themes.find((x) => allowedSet.has(x.name)) || themes[0];
+    const allowed = allowedNames(themes);
+    let t = themes.find((x) => x.name === name && allowed.includes(x.name));
+    if (!t) t = themes.find((x) => allowed.includes(x.name)) || themes[0];
     settings.themeKey = t.name;
     root.style.setProperty('--accent', t.accent);
     root.style.setProperty('--glow', t.glow);
@@ -594,15 +561,14 @@
     root.style.setProperty('--bh-opacity', String(settings.opacity));
     if (stopEngine) { stopEngine(); stopEngine = null; }
     if (t.kind === 'anim') {
-      bg.style.display = 'none'; bgNext.style.display = 'none'; canvas.style.display = 'block';
+      bg.style.display = 'none'; canvas.style.display = 'block';
       stopEngine = ENGINES[t.engine](canvas, canvas.getContext('2d'), t.accent);
     } else {
-      canvas.style.display = 'none'; bg.style.display = ''; bgNext.style.display = '';
-      if (!bg.style.backgroundImage) bg.style.backgroundImage = t.src;
-      else { bgNext.style.backgroundImage = t.src; bgNext.style.opacity = '1'; setTimeout(() => { bg.style.backgroundImage = t.src; bgNext.style.opacity = '0'; }, 1000); }
+      canvas.style.display = 'none'; bg.style.display = 'block';
+      bg.style.backgroundImage = t.src;
     }
-    const idx = allowedNames(themes).indexOf(t.name);
-    chip.querySelector('.name').textContent = `${idx + 1}/${allowedNames(themes).length} · ${t.name}${SCOPE === 'pairing' ? '' : ' · ' + SCOPE}`;
+    const idx = allowed.indexOf(t.name);
+    chip.querySelector('.name').textContent = `${idx + 1}/${allowed.length} · ${t.name}${SCOPE === 'pairing' ? '' : ' · ' + SCOPE}`;
     saveSettings();
   }
 
@@ -610,8 +576,7 @@
     const names = allowedNames(mergedThemes());
     const i = names.indexOf(settings.themeKey);
     const next = names[(i === -1 ? 0 : i + 1) % names.length];
-    applyByName(next);
-    scheduleRotate();
+    applyByName(next); scheduleRotate();
   }
   function scheduleRotate() {
     if (timer) clearTimeout(timer);

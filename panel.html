@@ -7,131 +7,157 @@
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body { margin: 0; padding: 32px; background: #0b0c0f; color: #e7e7ea; font: 14px/1.5 ui-sans-serif, system-ui, sans-serif; }
-  h1 { margin: 0 0 6px; font-size: 22px; }
+  body { margin: 0; min-height: 100vh; color: #e7e7ea; font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif; }
+  main { max-width: 900px; margin: 0 auto; padding: 32px 24px; position: relative; z-index: 1; }
+
+  .head { display: flex; justify-content: space-between; align-items: center; gap: 12px; margin-bottom: 8px; flex-wrap: wrap; }
+  h1 { margin: 0; font-size: 24px; letter-spacing: -0.01em; }
   h1 .dim { color: #6b6f76; font-weight: 400; }
-  h2 { margin: 28px 0 12px; font-size: 13px; text-transform: uppercase; letter-spacing: 0.14em; color: #8b8f96; }
-  form { display: flex; gap: 10px; margin-bottom: 20px; }
-  input {
-    background: #14161a; color: #e7e7ea; border: 1px solid #262a30; border-radius: 8px;
-    padding: 10px 14px; font-size: 14px; font-family: inherit; outline: none; flex: 1;
-  }
-  input:focus { border-color: #3b82f6; }
-  button {
-    background: #3b82f6; color: white; border: 0; border-radius: 8px;
-    padding: 10px 18px; font-size: 13px; font-weight: 600; cursor: pointer; font-family: inherit;
-  }
-  button:hover { background: #2f6fd4; }
-  button.ghost { background: transparent; color: #8b8f96; border: 1px solid #262a30; font-weight: 400; font-size: 11px; padding: 4px 10px; letter-spacing: 0.08em; text-transform: uppercase; }
-  button.ghost:hover { color: #f87171; border-color: #f87171; }
-  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; }
-  th, td { padding: 10px; text-align: left; border-bottom: 1px solid #1c1f24; }
-  th { color: #6b6f76; font-weight: 500; text-transform: uppercase; letter-spacing: 0.1em; font-size: 11px; }
-  tr.revoked td { color: #6b6f76; text-decoration: line-through; }
-  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: 0.08em; background: #163023; color: #34d399; }
+  h2 { margin: 26px 0 12px; font-size: 12px; letter-spacing: 0.16em; text-transform: uppercase; color: #8b8f96; font-weight: 500; }
+
+  button { background: var(--accent); color: white; border: 0; border-radius: 6px; padding: 8px 14px; font: inherit; font-size: 13px; font-weight: 600; cursor: pointer; transition: filter .15s, transform .05s; }
+  button:hover:not(:disabled) { filter: brightness(1.1); }
+  button.ghost { background: transparent; color: #8b8f96; border: 1px solid #262a30; padding: 6px 11px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; font-weight: 400; }
+  button.ghost:hover:not(:disabled) { color: var(--accent); border-color: var(--accent); filter: none; }
+  button.ghost.danger { color: #f87171; }
+  button.ghost.danger:hover:not(:disabled) { border-color: #f87171; }
+
+  input { background: rgba(20,22,26,0.85); color: #e7e7ea; border: 1px solid #262a30; border-radius: 6px; padding: 10px 12px; font: inherit; font-size: 14px; outline: none; width: 100%; transition: border-color .15s; }
+  input:focus { border-color: var(--accent); }
+  label { display: grid; gap: 5px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6f76; }
+
+  form.card { background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 12px; padding: 16px; margin-bottom: 20px; display: grid; gap: 12px; backdrop-filter: blur(6px); }
+  form.card .row { display: flex; gap: 10px; align-items: flex-end; }
+  form.card .row > div { flex: 1; }
+
+  table { width: 100%; border-collapse: collapse; font-family: ui-monospace, monospace; font-size: 12px; background: rgba(10,11,14,0.6); backdrop-filter: blur(6px); border-radius: 8px; overflow: hidden; }
+  th, td { padding: 9px 11px; text-align: left; border-bottom: 1px solid #1c1f24; }
+  th { color: #6b6f76; font-weight: 500; font-size: 11px; text-transform: uppercase; letter-spacing: 0.1em; background: rgba(20,22,26,0.5); }
+  tr.dim td { color: #6b6f76; text-decoration: line-through; }
+  .empty { color: #6b6f76; font-style: italic; padding: 16px 0; text-align: center; }
+  .pill { display: inline-block; padding: 2px 8px; border-radius: 10px; font-size: 11px; letter-spacing: 0.06em; }
+  .pill.active  { background: #163023; color: #34d399; }
   .pill.revoked { background: #2c1b1b; color: #f87171; }
-  .empty { color: #6b6f76; font-style: italic; padding: 12px 0; }
-  .banner {
-    margin: 16px 0; padding: 16px; border-radius: 10px;
-    background: #112a1e; border: 1px solid #1d4a35; font-family: ui-monospace, monospace; font-size: 13px;
-    display: none;
+  .key-box { margin-bottom: 20px; padding: 18px; border-radius: 12px; background: rgba(16,36,26,0.75); border: 1px solid #1d4a35; backdrop-filter: blur(6px); }
+  .key-box .label { color: #34d399; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 10px; }
+  .key-box .key { font-family: ui-monospace, monospace; font-size: 15px; word-break: break-all; user-select: all; cursor: pointer; }
+  .row-actions { display: flex; gap: 6px; }
+  @media (max-width: 640px) {
+    main { padding: 20px 14px; }
+    h1 { font-size: 20px; }
+    table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
+    th, td { padding: 7px 9px; font-size: 11px; }
+    input { font-size: 16px; }
+    form.card .row { flex-direction: column; align-items: stretch; }
   }
-  .banner.show { display: block; }
-  .banner .label { color: #34d399; font-size: 11px; letter-spacing: 0.16em; text-transform: uppercase; margin-bottom: 8px; }
-  .banner .key { word-break: break-all; user-select: all; cursor: pointer; }
-  .banner .hint { color: #8b8f96; font-size: 12px; margin-top: 8px; }
 </style>
 </head>
 <body>
-<h1>bothub <span class="dim">· panel</span></h1>
-<div style="color:#6b6f76;font-size:12px;">API key management · <a href="/docs" style="color:#60a5fa;">/docs</a></div>
 
-<div class="banner" id="newKeyBanner">
-  <div class="label">new API key — shown once, copy it now</div>
-  <div class="key" id="newKeyValue" title="click to copy">—</div>
-  <div class="hint">click the key to copy it to your clipboard</div>
+<div id="app" hidden>
+  <main>
+    <div class="head">
+      <h1>bothub <span class="dim">· panel</span></h1>
+      <button class="ghost" id="signOut">sign out</button>
+    </div>
+
+    <h2>Create API key</h2>
+    <form id="createForm" class="card">
+      <div class="row">
+        <div><label>label<input id="label" placeholder="e.g. 'my bot'"></label></div>
+        <div><label>attach to account (optional)<input id="accountId" placeholder="account id"></label></div>
+        <div style="flex:0;"><button type="submit">create</button></div>
+      </div>
+    </form>
+
+    <div class="key-box" id="newKeyBox" hidden>
+      <div class="label">new key — copy it now, shown once</div>
+      <div class="key" id="newKeyValue" title="click to copy">—</div>
+    </div>
+
+    <h2>Keys</h2>
+    <table>
+      <thead><tr><th>prefix</th><th>label</th><th>account</th><th>created</th><th>last used</th><th>uses</th><th>status</th><th></th></tr></thead>
+      <tbody id="keysTable"><tr><td colspan="8" class="empty">loading…</td></tr></tbody>
+    </table>
+  </main>
 </div>
 
-<h2>Create a key</h2>
-<form id="createForm">
-  <input id="label" placeholder="label — e.g. 'my other bot', 'website X'" autocomplete="off">
-  <button type="submit">create key</button>
-</form>
-
-<h2>Existing keys</h2>
-<table>
-  <thead><tr><th>prefix</th><th>label</th><th>created</th><th>last used</th><th>uses</th><th>status</th><th></th></tr></thead>
-  <tbody id="keys"><tr><td colspan="7" class="empty">loading…</td></tr></tbody>
-</table>
-
+<script src="/admin-gate.js"></script>
 <script>
+  const $ = (id) => document.getElementById(id);
   const token = new URLSearchParams(location.search).get('token') || '';
-  const q = (p) => p + (p.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+  const withToken = (p) => p + (p.includes('?') ? '&' : '?') + 'token=' + encodeURIComponent(token);
+  let adminSession = '';
 
-  async function copyToClipboard(text) {
-    try { await navigator.clipboard.writeText(text); return true; }
-    catch {
-      const ta = document.createElement('textarea');
-      ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0';
-      document.body.appendChild(ta); ta.select();
-      let ok = false; try { ok = document.execCommand('copy'); } catch {}
-      document.body.removeChild(ta); return ok;
-    }
+  window.setupAdminGate({
+    token,
+    onReady: (s) => { adminSession = s; document.getElementById('app').hidden = false; load(); },
+  });
+
+  async function adminApi(path, opts = {}) {
+    const headers = { 'Content-Type': 'application/json', 'X-Admin-Session': adminSession, ...(opts.headers || {}) };
+    const r = await fetch(withToken(path), { ...opts, headers });
+    const data = await r.json().catch(() => ({}));
+    if (r.status === 401) { sessionStorage.removeItem('bothub.admin_session'); location.reload(); throw new Error('session expired'); }
+    if (!r.ok) throw new Error(data.error || ('HTTP ' + r.status));
+    return data;
   }
-
-  document.getElementById('newKeyValue').addEventListener('click', async () => {
-    const v = document.getElementById('newKeyValue').textContent;
-    if (v && v !== '—') await copyToClipboard(v);
-  });
-
-  document.getElementById('createForm').addEventListener('submit', async (e) => {
-    e.preventDefault();
-    const label = document.getElementById('label').value || 'default';
-    const r = await fetch(q('/api/panel/keys'), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ label, token }),
-    });
-    if (!r.ok) return alert('failed to create key');
-    const data = await r.json();
-    document.getElementById('newKeyValue').textContent = data.key;
-    document.getElementById('newKeyBanner').classList.add('show');
-    document.getElementById('label').value = '';
-    load();
-  });
 
   async function load() {
     try {
-      const r = await fetch(q('/api/panel/keys'));
-      if (!r.ok) throw new Error(r.status);
-      const list = await r.json();
-      const tb = document.getElementById('keys');
-      if (!list.length) { tb.innerHTML = '<tr><td colspan="7" class="empty">no keys yet</td></tr>'; return; }
-      tb.innerHTML = list.map(k => `
-        <tr class="${k.revoked ? 'revoked' : ''}">
+      const list = await adminApi('/api/panel/keys');
+      const tb = $('keysTable');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">no keys yet</td></tr>'; return; }
+      tb.innerHTML = list.map((k) => `
+        <tr class="${k.revoked ? 'dim' : ''}">
           <td>${k.prefix}</td>
           <td>${k.label}</td>
-          <td>${k.created?.slice(0, 19).replace('T', ' ') || '—'}</td>
-          <td>${k.lastUsed?.slice(0, 19).replace('T', ' ') || '—'}</td>
+          <td>${k.accountId ? k.accountId.slice(0, 8) + '…' : '—'}</td>
+          <td>${(k.created || '').slice(0, 16).replace('T', ' ')}</td>
+          <td>${(k.lastUsed || '').slice(0, 16).replace('T', ' ') || '—'}</td>
           <td>${k.uses || 0}</td>
-          <td><span class="pill ${k.revoked ? 'revoked' : ''}">${k.revoked ? 'revoked' : 'active'}</span></td>
-          <td>${k.revoked ? '' : `<button class="ghost" data-key="${k.key}">revoke</button>`}</td>
+          <td><span class="pill ${k.revoked ? 'revoked' : 'active'}">${k.revoked ? 'revoked' : 'active'}</span></td>
+          <td class="row-actions">
+            <button class="ghost" data-copy="${k.key}">copy</button>
+            ${k.revoked ? '' : `<button class="ghost danger" data-revoke="${k.id}">revoke</button>`}
+          </td>
         </tr>`).join('');
-      tb.querySelectorAll('button[data-key]').forEach(b => {
-        b.addEventListener('click', async () => {
-          if (!confirm('Revoke this key?')) return;
-          await fetch(q('/api/panel/keys/revoke'), {
-            method: 'POST', headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ key: b.dataset.key, token }),
-          });
-          load();
-        });
-      });
-    } catch (e) {
-      document.getElementById('keys').innerHTML = `<tr><td colspan="7" class="empty">error: ${e.message}</td></tr>`;
-    }
+      tb.querySelectorAll('button[data-copy]').forEach((b) => b.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1200); } catch {}
+      }));
+      tb.querySelectorAll('button[data-revoke]').forEach((b) => b.addEventListener('click', async () => {
+        if (!confirm('Revoke this key? Any bot using it stops working.')) return;
+        await adminApi('/api/panel/keys/revoke', { method: 'POST', body: JSON.stringify({ id: b.dataset.revoke }) });
+        load();
+      }));
+    } catch (err) { $('keysTable').innerHTML = `<tr><td colspan="8" class="empty">error: ${err.message}</td></tr>`; }
   }
 
-  load();
+  $('createForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const label = $('label').value.trim() || 'default';
+    const accountId = $('accountId').value.trim() || null;
+    try {
+      const r = await adminApi('/api/panel/keys', { method: 'POST', body: JSON.stringify({ label, accountId }) });
+      $('newKeyBox').hidden = false;
+      $('newKeyValue').textContent = r.key;
+      $('label').value = '';
+      $('accountId').value = '';
+      load();
+    } catch (err) { alert(err.message); }
+  });
+
+  $('newKeyValue').addEventListener('click', async () => {
+    const v = $('newKeyValue').textContent;
+    if (v && v !== '—') { try { await navigator.clipboard.writeText(v); } catch {} }
+  });
+
+  $('signOut').addEventListener('click', () => {
+    sessionStorage.removeItem('bothub.admin_session');
+    location.reload();
+  });
 </script>
+<script src="/theme.js" data-scope="admin"></script>
 </body>
 </html>
