@@ -6,6 +6,7 @@
 (function () {
   const SVG = (s) => `url('data:image/svg+xml;utf8,${encodeURIComponent(s)}')`;
 
+  // ── SVG backgrounds ──
   const NEBULA = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice"><defs><radialGradient id="a" cx="30%" cy="30%" r="70%"><stop offset="0%" stop-color="#7c5cff"/><stop offset="60%" stop-color="#1a1a3a"/><stop offset="100%" stop-color="#05060a"/></radialGradient><radialGradient id="b" cx="70%" cy="70%" r="60%"><stop offset="0%" stop-color="#22d3ee" stop-opacity="0.8"/><stop offset="100%" stop-color="#05060a" stop-opacity="0"/></radialGradient></defs><rect width="600" height="600" fill="url(#a)"/><circle cx="420" cy="420" r="300" fill="url(#b)"/></svg>';
   const GRID = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><rect width="600" height="600" fill="#05060a"/><g stroke="#1c2a44" stroke-width="1"><path d="M0 60H600 M0 120H600 M0 180H600 M0 240H600 M0 300H600 M0 360H600 M0 420H600 M0 480H600 M0 540H600"/><path d="M60 0V600 M120 0V600 M180 0V600 M240 0V600 M300 0V600 M360 0V600 M420 0V600 M480 0V600 M540 0V600"/></g><g fill="#22d3ee"><circle cx="120" cy="180" r="3"/><circle cx="360" cy="300" r="3"/><circle cx="480" cy="120" r="3"/><circle cx="180" cy="420" r="3"/><circle cx="540" cy="480" r="3"/></g></svg>';
   const WAVES = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><rect width="600" height="600" fill="#05060a"/><path d="M0 400 Q150 340 300 400 T600 400 V600 H0 Z" fill="#0c4a6e" opacity="0.6"/><path d="M0 460 Q150 400 300 460 T600 460 V600 H0 Z" fill="#0ea5e9" opacity="0.4"/><path d="M0 520 Q150 460 300 520 T600 520 V600 H0 Z" fill="#38bdf8" opacity="0.3"/></svg>';
@@ -14,6 +15,10 @@
     const text = rows.map((r, i) => `<text x="20" y="${40 + i * 40}">${r}</text>`).join('');
     return `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><rect width="600" height="600" fill="#05060a"/><g font-family="monospace" font-size="16" fill="#34d399" opacity="0.7">${text}</g></svg>`;
   })();
+  const AURORA = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600" preserveAspectRatio="xMidYMid slice"><defs><linearGradient id="aa" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stop-color="#0a0a1f"/><stop offset="100%" stop-color="#05060a"/></linearGradient><linearGradient id="ab" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#7c5cff" stop-opacity="0"/><stop offset="50%" stop-color="#7c5cff" stop-opacity="0.6"/><stop offset="100%" stop-color="#22d3ee" stop-opacity="0"/></linearGradient><linearGradient id="ac" x1="0" y1="0" x2="1" y2="0"><stop offset="0%" stop-color="#22d3ee" stop-opacity="0"/><stop offset="50%" stop-color="#34d399" stop-opacity="0.5"/><stop offset="100%" stop-color="#a78bfa" stop-opacity="0"/></linearGradient></defs><rect width="600" height="600" fill="url(#aa)"/><ellipse cx="300" cy="180" rx="520" ry="80" fill="url(#ab)" opacity="0.7"/><ellipse cx="300" cy="280" rx="480" ry="60" fill="url(#ac)" opacity="0.55"/><ellipse cx="300" cy="380" rx="500" ry="70" fill="url(#ab)" opacity="0.45"/><ellipse cx="300" cy="470" rx="450" ry="50" fill="url(#ac)" opacity="0.35"/></svg>';
+  const MESH = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><rect width="600" height="600" fill="#05060a"/><g stroke="#7c5cff" stroke-width="1" fill="none" opacity="0.45"><path d="M0 0 L150 80 L300 20 L450 100 L600 40"/><path d="M0 200 L150 280 L300 220 L450 300 L600 240"/><path d="M0 400 L150 480 L300 420 L450 500 L600 440"/><path d="M0 0 L0 600 M150 80 L150 280 L150 480 M300 20 L300 220 L300 420 M450 100 L450 300 L450 500 M600 40 L600 440"/></g><g fill="#22d3ee" opacity="0.7"><circle cx="150" cy="80" r="4"/><circle cx="300" cy="20" r="4"/><circle cx="450" cy="100" r="4"/><circle cx="150" cy="280" r="4"/><circle cx="300" cy="220" r="4"/><circle cx="450" cy="300" r="4"/><circle cx="150" cy="480" r="4"/><circle cx="300" cy="420" r="4"/><circle cx="450" cy="500" r="4"/></g></svg>';
+  const CIRCUIT = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><rect width="600" height="600" fill="#05060a"/><g stroke="#34d399" stroke-width="1.5" fill="none" opacity="0.55"><path d="M60 60 H180 V120 H300 V60 H420 V180"/><path d="M60 240 H240 V360 H360 V240 H540"/><path d="M60 480 H180 V540 H420 V480 H540"/><path d="M120 60 V240 M240 120 V360 M360 60 V300 M480 180 V480"/></g><g fill="#34d399" opacity="0.85"><circle cx="60" cy="60" r="5"/><circle cx="420" cy="180" r="5"/><circle cx="240" cy="360" r="5"/><circle cx="540" cy="240" r="5"/><circle cx="420" cy="480" r="5"/><circle cx="480" cy="480" r="5"/></g></svg>';
+  const HEXGRID = '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 600 600"><defs><pattern id="hg" x="0" y="0" width="60" height="52" patternUnits="userSpaceOnUse"><path d="M15 1 L45 1 L60 26 L45 51 L15 51 L0 26 Z" fill="none" stroke="#22d3ee" stroke-width="1" opacity="0.32"/></pattern></defs><rect width="600" height="600" fill="#05060a"/><rect width="600" height="600" fill="url(#hg)"/></svg>';
 
   const REDUCED = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const HAS_FINE_POINTER = window.matchMedia && window.matchMedia('(hover: hover) and (pointer: fine)').matches;
@@ -71,20 +76,123 @@
     frame();
     return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
   }
-  const ENGINES = { matrix: matrixEngine, particles: particlesEngine, starfield: starfieldEngine };
+  function networkEngine(canvas, ctx, accent) {
+    let nodes = [], w, h, raf;
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+      nodes = Array.from({ length: 60 }, () => ({
+        x: Math.random() * w, y: Math.random() * h,
+        vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4,
+      }));
+    }
+    resize(); window.addEventListener('resize', resize);
+    function frame() {
+      ctx.clearRect(0, 0, w, h);
+      for (const n of nodes) {
+        n.x += n.vx; n.y += n.vy;
+        if (n.x < 0 || n.x > w) n.vx *= -1;
+        if (n.y < 0 || n.y > h) n.vy *= -1;
+      }
+      ctx.strokeStyle = accent; ctx.lineWidth = 1;
+      for (let i = 0; i < nodes.length; i++) {
+        for (let j = i + 1; j < nodes.length; j++) {
+          const dx = nodes[i].x - nodes[j].x, dy = nodes[i].y - nodes[j].y;
+          const d2 = dx * dx + dy * dy;
+          if (d2 < 140 * 140) {
+            ctx.globalAlpha = 1 - d2 / (140 * 140);
+            ctx.beginPath();
+            ctx.moveTo(nodes[i].x, nodes[i].y);
+            ctx.lineTo(nodes[j].x, nodes[j].y);
+            ctx.stroke();
+          }
+        }
+      }
+      ctx.globalAlpha = 1; ctx.fillStyle = accent;
+      for (const n of nodes) { ctx.beginPath(); ctx.arc(n.x, n.y, 2.5, 0, Math.PI * 2); ctx.fill(); }
+      if (!REDUCED) raf = requestAnimationFrame(frame);
+    }
+    frame();
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+  }
+  function rainEngine(canvas, ctx, accent) {
+    let drops = [], w, h, raf;
+    function resize() {
+      w = canvas.width = window.innerWidth;
+      h = canvas.height = window.innerHeight;
+      drops = Array.from({ length: 140 }, () => ({
+        x: Math.random() * w, y: Math.random() * h,
+        len: Math.random() * 20 + 10, v: Math.random() * 3 + 3,
+      }));
+    }
+    resize(); window.addEventListener('resize', resize);
+    function frame() {
+      ctx.fillStyle = 'rgba(5,6,8,0.15)';
+      ctx.fillRect(0, 0, w, h);
+      ctx.strokeStyle = accent; ctx.lineWidth = 1;
+      for (const d of drops) {
+        ctx.globalAlpha = 0.35 + Math.random() * 0.4;
+        ctx.beginPath();
+        ctx.moveTo(d.x, d.y);
+        ctx.lineTo(d.x, d.y + d.len);
+        ctx.stroke();
+        d.y += d.v;
+        if (d.y > h) { d.y = -d.len; d.x = Math.random() * w; }
+      }
+      ctx.globalAlpha = 1;
+      if (!REDUCED) raf = requestAnimationFrame(frame);
+    }
+    frame();
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+  }
+  function pulseEngine(canvas, ctx, accent) {
+    let pulses = [], w, h, raf, lastSpawn = 0;
+    function resize() { w = canvas.width = window.innerWidth; h = canvas.height = window.innerHeight; }
+    resize(); window.addEventListener('resize', resize);
+    function frame(t) {
+      ctx.fillStyle = 'rgba(5,6,8,0.12)';
+      ctx.fillRect(0, 0, w, h);
+      if (t - lastSpawn > 500) { pulses.push({ x: Math.random() * w, y: Math.random() * h, r: 0 }); lastSpawn = t; }
+      const maxR = Math.max(w, h);
+      pulses = pulses.filter((p) => p.r < maxR);
+      ctx.strokeStyle = accent; ctx.lineWidth = 1.5;
+      for (const p of pulses) {
+        ctx.globalAlpha = 1 - p.r / maxR;
+        ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.stroke();
+        p.r += 1.5;
+      }
+      ctx.globalAlpha = 1;
+      if (!REDUCED) raf = requestAnimationFrame(frame);
+    }
+    frame(performance.now());
+    return () => { cancelAnimationFrame(raf); window.removeEventListener('resize', resize); };
+  }
+
+  const ENGINES = {
+    matrix: matrixEngine, particles: particlesEngine, starfield: starfieldEngine,
+    network: networkEngine, rain: rainEngine, pulse: pulseEngine,
+  };
 
   const BUILTINS = [
-    { kind: 'svg',  name: 'nebula',    src: SVG(NEBULA), accent: '#a78bfa', glow: '167,139,250' },
-    { kind: 'svg',  name: 'grid',      src: SVG(GRID),   accent: '#22d3ee', glow: '34,211,238'  },
-    { kind: 'svg',  name: 'waves',     src: SVG(WAVES),  accent: '#38bdf8', glow: '56,189,248'  },
-    { kind: 'svg',  name: 'digits',    src: SVG(DIGITS), accent: '#34d399', glow: '52,211,153'  },
+    { kind: 'svg',  name: 'nebula',    src: SVG(NEBULA),  accent: '#a78bfa', glow: '167,139,250' },
+    { kind: 'svg',  name: 'grid',      src: SVG(GRID),    accent: '#22d3ee', glow: '34,211,238'  },
+    { kind: 'svg',  name: 'waves',     src: SVG(WAVES),   accent: '#38bdf8', glow: '56,189,248'  },
+    { kind: 'svg',  name: 'digits',    src: SVG(DIGITS),  accent: '#34d399', glow: '52,211,153'  },
+    { kind: 'svg',  name: 'aurora',    src: SVG(AURORA),  accent: '#a78bfa', glow: '167,139,250' },
+    { kind: 'svg',  name: 'mesh',      src: SVG(MESH),    accent: '#7c5cff', glow: '124,92,255'  },
+    { kind: 'svg',  name: 'circuit',   src: SVG(CIRCUIT), accent: '#34d399', glow: '52,211,153'  },
+    { kind: 'svg',  name: 'hexgrid',   src: SVG(HEXGRID), accent: '#22d3ee', glow: '34,211,238'  },
     { kind: 'anim', name: 'matrix',    engine: 'matrix',    accent: '#34d399', glow: '52,211,153'  },
     { kind: 'anim', name: 'particles', engine: 'particles', accent: '#60a5fa', glow: '96,165,250'  },
     { kind: 'anim', name: 'starfield', engine: 'starfield', accent: '#e7e7ea', glow: '231,231,234' },
+    { kind: 'anim', name: 'network',   engine: 'network',   accent: '#60a5fa', glow: '96,165,250'  },
+    { kind: 'anim', name: 'rain',      engine: 'rain',      accent: '#7dd3fc', glow: '125,211,252' },
+    { kind: 'anim', name: 'pulse',     engine: 'pulse',     accent: '#e879f9', glow: '232,121,249' },
   ];
   const ALL_NAMES = BUILTINS.map((t) => t.name);
   const ROTATE_MS = 22000;
   const SERVER_TRACKS = ['track1.mp3','track2.mp3','track3.mp3','track4.mp3','track5.mp3'];
+
   const scriptEl = document.currentScript || document.querySelector('script[data-scope]');
   const SCOPE = (scriptEl?.dataset?.scope || 'pairing').toLowerCase();
   const SETTINGS_KEY = 'bothub.theme_settings:' + SCOPE;
@@ -158,9 +266,7 @@
     :root { --accent: #3b82f6; --glow: 59,130,246; }
     * { -webkit-tap-highlight-color: transparent; }
     html, body { overflow-x: hidden; }
-
     a, button, [role="button"], input[type=submit], select, label { cursor: pointer; }
-
     body[data-cursor="crosshair"], body[data-cursor="crosshair"] a, body[data-cursor="crosshair"] button,
     body[data-cursor="crosshair"] input, body[data-cursor="crosshair"] select, body[data-cursor="crosshair"] label { cursor: crosshair; }
     body[data-cursor="cell"], body[data-cursor="cell"] a, body[data-cursor="cell"] button,
