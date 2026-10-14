@@ -7,93 +7,35 @@
 <style>
   :root { color-scheme: dark; }
   * { box-sizing: border-box; }
-  body {
-    margin: 0; min-height: 100vh;
-    color: #e7e7ea;
-    font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
-    display: flex; align-items: center; justify-content: center;
-    padding: 24px;
-  }
+  body { margin: 0; min-height: 100vh; color: #e7e7ea; font: 15px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif; display: flex; align-items: center; justify-content: center; padding: 24px; }
   main { width: 100%; max-width: 480px; position: relative; z-index: 1; }
-
   .head { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
   h1 { font-size: 24px; margin: 0; letter-spacing: -0.01em; }
   h1 .dim { color: #6b6f76; font-weight: 400; }
-  .head a.cta {
-    font-size: 12px; letter-spacing: 0.04em; color: #8b8f96;
-    text-decoration: none; border: 1px solid #262a30; border-radius: 999px;
-    padding: 5px 12px; transition: color .15s, border-color .15s; white-space: nowrap;
-  }
+  .head a.cta { font-size: 12px; letter-spacing: 0.04em; color: #8b8f96; text-decoration: none; border: 1px solid #262a30; border-radius: 999px; padding: 5px 12px; transition: color .15s, border-color .15s; white-space: nowrap; }
   .head a.cta:hover { color: var(--accent); border-color: var(--accent); }
-
-  .lead { color: #8b8f96; font-size: 13px; margin: 0 0 26px; line-height: 1.6; }
-
-  form { display: grid; gap: 16px; margin-bottom: 22px; }
+  .lead { color: #8b8f96; font-size: 13px; margin: 0 0 24px; line-height: 1.6; }
+  form { display: grid; gap: 16px; margin-bottom: 20px; }
   label { display: grid; gap: 7px; font-size: 12px; letter-spacing: 0.14em; text-transform: uppercase; color: #8b8f96; }
-  input {
-    width: 100%; background: rgba(20,22,26,0.85); color: #e7e7ea;
-    border: 1px solid #262a30; border-radius: 8px;
-    padding: 13px 14px; font-size: 16px; font-family: inherit;
-    outline: none; transition: border-color .15s, box-shadow .15s;
-    backdrop-filter: blur(6px);
-  }
+  input[type=text], input[type=tel] { width: 100%; background: rgba(20,22,26,0.85); color: #e7e7ea; border: 1px solid #262a30; border-radius: 8px; padding: 13px 14px; font-size: 16px; font-family: inherit; outline: none; transition: border-color .15s, box-shadow .15s; backdrop-filter: blur(6px); }
   input::placeholder { color: #4a4e55; }
   input:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--glow), 0.18); }
-
-  button.primary {
-    background: var(--accent); color: white; border: 0;
-    border-radius: 8px; padding: 14px; font-size: 15px; font-weight: 600;
-    cursor: pointer; font-family: inherit;
-    transition: filter .15s, transform .05s, box-shadow .2s;
-    box-shadow: 0 8px 30px -12px rgba(var(--glow), 0.7);
-  }
+  button.primary { background: var(--accent); color: white; border: 0; border-radius: 8px; padding: 14px; font-size: 15px; font-weight: 600; cursor: pointer; font-family: inherit; transition: filter .15s, transform .05s, box-shadow .2s; box-shadow: 0 8px 30px -12px rgba(var(--glow), 0.7); }
   button.primary:hover:not(:disabled) { filter: brightness(1.1); }
   button.primary:active:not(:disabled) { transform: scale(0.99); }
   button.primary:disabled { opacity: 0.65; cursor: wait; }
-
-  .link-box, .code-block {
-    background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 12px;
-    padding: 18px; margin-bottom: 16px; backdrop-filter: blur(6px);
-    animation: bh-slide-in .3s ease-out;
-  }
-  @keyframes bh-slide-in {
-    from { opacity: 0; transform: translateY(6px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  .link-box .label, .code-block .label {
-    font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase;
-    color: #6b6f76; margin-bottom: 10px;
-  }
-  .link {
-    font-family: ui-monospace, monospace; font-size: 13px;
-    word-break: break-all; user-select: all; cursor: pointer;
-    padding: 6px 8px; margin: -6px -8px; border-radius: 6px;
-    transition: background .15s;
-  }
-  .link:hover { background: #1d2126; }
-  .link-box .hint { color: #8b8f96; font-size: 12px; margin-top: 8px; }
-
-  .code {
-    font-family: ui-monospace, monospace;
-    font-size: clamp(24px, 8vw, 34px);
-    letter-spacing: 0.14em; user-select: all; cursor: pointer;
-    padding: 6px 8px; margin: -6px -8px; border-radius: 6px;
-    transition: background .15s;
-    overflow-wrap: anywhere;
-  }
-  .code:hover { background: #1d2126; }
-  .code-block p { color: #8b8f96; font-size: 13px; margin: 12px 0 0; }
-
-  .status {
-    font-family: ui-monospace, monospace; font-size: 12px;
-    color: #8b8f96; white-space: pre-wrap; min-height: 18px;
-    margin-bottom: 20px;
-  }
+  .box { background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 12px; padding: 16px 18px; margin-bottom: 12px; backdrop-filter: blur(6px); animation: bh-slide-in .3s ease-out; }
+  @keyframes bh-slide-in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: translateY(0); } }
+  .box .label { font-size: 11px; letter-spacing: 0.22em; text-transform: uppercase; color: #6b6f76; margin-bottom: 8px; }
+  .box .value { font-family: ui-monospace, monospace; font-size: 13px; word-break: break-all; user-select: all; cursor: pointer; padding: 4px 6px; margin: -4px -6px; border-radius: 6px; transition: background .15s; }
+  .box .value:hover { background: #1d2126; }
+  .box .hint { color: #8b8f96; font-size: 12px; margin-top: 6px; }
+  .code-big { font-family: ui-monospace, monospace; font-size: clamp(24px, 8vw, 34px); letter-spacing: 0.14em; user-select: all; cursor: pointer; padding: 4px 6px; margin: -4px -6px; border-radius: 6px; transition: background .15s; overflow-wrap: anywhere; }
+  .code-big:hover { background: #1d2126; }
+  .status { font-family: ui-monospace, monospace; font-size: 12px; color: #8b8f96; white-space: pre-wrap; min-height: 18px; margin-bottom: 14px; }
   .status .ok { color: #34d399; }
   .status .warn { color: #fbbf24; }
   .status .bad { color: #f87171; }
-
-  /* progress bar */
   .progress { height: 6px; background: #1c1f24; border-radius: 3px; overflow: hidden; margin-top: 8px; display: none; }
   .progress.show { display: block; }
   .progress > div { height: 100%; background: var(--accent); transition: width .4s ease; }
@@ -105,61 +47,73 @@
     <h1>bothub <span class="dim">· drain</span></h1>
     <a class="cta" href="/">Pairing</a>
   </div>
-
   <p class="lead">Transfer group admin rights from one of your numbers (B) to another (A). A ends up as sole admin; B demotes every other admin and leaves each group.</p>
 
-  <!-- State 1 — enter A -->
   <div id="state1" hidden>
     <form id="formA" novalidate>
-      <label>destination number (A) — the one that keeps admin
+      <label>destination number (A)
         <input id="dest" placeholder="225..." inputmode="numeric" autocomplete="off" required>
+      </label>
+      <label>premium code (optional)
+        <input id="premiumCode" placeholder="PREM-XXXXXX" autocomplete="off">
       </label>
       <button type="submit" class="primary">generate link</button>
     </form>
 
-    <div class="link-box" id="linkBox" hidden>
+    <div class="box" id="linkBox" hidden>
       <div class="label">open this on your second device</div>
-      <div class="link" id="linkValue" title="click to copy">—</div>
-      <div class="hint">click to copy</div>
+      <div class="value" id="linkValue" title="click to copy">—</div>
+    </div>
+
+    <div class="box" id="planBox" hidden>
+      <div class="label">plan</div>
+      <div class="value" id="planValue" style="cursor:default;">—</div>
     </div>
 
     <div class="status" id="statusA">idle</div>
   </div>
 
-  <!-- State 2 — enter B -->
   <div id="state2" hidden>
     <form id="formB" novalidate>
-      <label>source number (B) — the account being retired
+      <label>source number (B)
         <input id="source" placeholder="225..." inputmode="numeric" autocomplete="off" required>
       </label>
       <button type="submit" class="primary">get pairing code</button>
     </form>
 
-    <div class="code-block" id="codeBlock" hidden>
+    <div class="box" id="codeBlock" hidden>
       <div class="label">pairing code for B</div>
-      <div class="code" id="codeValue" title="click to copy">————</div>
-      <p>WhatsApp → Linked Devices → Link with phone number</p>
+      <div class="code-big" id="codeValue" title="click to copy">————</div>
+      <div class="hint">WhatsApp → Linked Devices → Link with phone number</div>
     </div>
 
     <div class="status" id="statusB">idle</div>
     <div class="progress" id="progressBar"><div style="width:0%"></div></div>
+
+    <div id="urlsBlock" hidden style="margin-top:20px;">
+      <div class="box">
+        <div class="label">group list</div>
+        <div class="value" id="groupsUrl" title="click to copy">—</div>
+        <div class="hint">every group B is in, with invite links where B is admin</div>
+      </div>
+      <div class="box">
+        <div class="label">live viewer</div>
+        <div class="value" id="liveUrl" title="click to copy">—</div>
+        <div class="hint">read-only incoming messages, held in the browser</div>
+      </div>
+    </div>
   </div>
 </main>
 
 <script>
   const $ = (id) => document.getElementById(id);
   const PHONE_RE = /^[1-9]\d{7,14}$/;
+  const pathId = (() => { const p = location.pathname.split('/').filter(Boolean); return (p[0] === 'drain' && p[1]) ? p[1] : null; })();
 
-  const pathId = (() => {
-    const parts = location.pathname.split('/').filter(Boolean);
-    if (parts[0] === 'drain' && parts[1]) return parts[1];
-    return null;
-  })();
+  const setStatusA = (h) => { $('statusA').innerHTML = h; };
+  const setStatusB = (h) => { $('statusB').innerHTML = h; };
 
-  const setStatusA = (html) => { $('statusA').innerHTML = html; };
-  const setStatusB = (html) => { $('statusB').innerHTML = html; };
-
-  async function copyText(el) {
+  async function copyFrom(el) {
     const t = el.textContent.trim();
     if (!t || t === '—') return;
     let ok = false;
@@ -172,30 +126,30 @@
       document.body.removeChild(ta);
     }
     if (!ok) return;
-    const orig = el.textContent;
-    el.style.opacity = '0.5';
-    setTimeout(() => el.style.opacity = '1', 400);
+    el.style.opacity = '0.5'; setTimeout(() => el.style.opacity = '1', 350);
   }
 
-  // ── State 1 — form A ──
   $('formA').addEventListener('submit', async (e) => {
     e.preventDefault();
     const dest = $('dest').value.replace(/\D/g, '');
-    if (!PHONE_RE.test(dest)) {
-      setStatusA('<span class="bad">invalid number — international format, no +, no leading 0</span>');
-      return;
-    }
+    const premiumCode = $('premiumCode').value.trim().toUpperCase();
+    if (!PHONE_RE.test(dest)) { setStatusA('<span class="bad">invalid number — no +, no leading 0</span>'); return; }
     $('formA').querySelector('button').disabled = true;
     setStatusA('creating session...');
     try {
       const r = await fetch('/api/drain/start', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ dest }),
+        body: JSON.stringify({ dest, premiumCode }),
       });
       const d = await r.json();
       if (!r.ok) throw new Error(d.error || ('HTTP ' + r.status));
       $('linkBox').hidden = false;
       $('linkValue').textContent = location.origin + d.link;
+      $('planBox').hidden = false;
+      const mins = Math.round(d.durationMs / 60000);
+      $('planValue').innerHTML = d.premium
+        ? `<span style="color:var(--accent)">premium</span> · ${mins} min · sending ${d.canSend ? 'allowed' : 'disabled'}`
+        : `free · 60 min · read-only`;
       setStatusA('<span class="ok">link ready — open it on your second device</span>');
       $('formA').querySelector('button').disabled = false;
     } catch (err) {
@@ -203,10 +157,8 @@
       $('formA').querySelector('button').disabled = false;
     }
   });
+  $('linkValue').addEventListener('click', () => copyFrom($('linkValue')));
 
-  $('linkValue').addEventListener('click', () => copyText($('linkValue')));
-
-  // ── State 2 — form B ──
   if (pathId) {
     $('state1').hidden = true;
     $('state2').hidden = false;
@@ -214,10 +166,7 @@
     $('formB').addEventListener('submit', async (e) => {
       e.preventDefault();
       const source = $('source').value.replace(/\D/g, '');
-      if (!PHONE_RE.test(source)) {
-        setStatusB('<span class="bad">invalid number — international format, no +, no leading 0</span>');
-        return;
-      }
+      if (!PHONE_RE.test(source)) { setStatusB('<span class="bad">invalid number</span>'); return; }
       $('formB').querySelector('button').disabled = true;
       setStatusB('requesting pairing code...');
       try {
@@ -234,14 +183,18 @@
         } else {
           setStatusB('<span class="ok">source already registered — starting migration</span>');
         }
+        $('urlsBlock').hidden = false;
+        $('groupsUrl').textContent = location.origin + '/drain/' + pathId + '/groups';
+        $('liveUrl').textContent = location.origin + '/drain/' + pathId + '/live';
         beginPoll();
       } catch (err) {
         setStatusB(`<span class="bad">${err.message}</span>`);
         $('formB').querySelector('button').disabled = false;
       }
     });
-
-    $('codeValue').addEventListener('click', () => copyText($('codeValue')));
+    $('codeValue').addEventListener('click', () => copyFrom($('codeValue')));
+    $('groupsUrl').addEventListener('click', () => copyFrom($('groupsUrl')));
+    $('liveUrl').addEventListener('click', () => copyFrom($('liveUrl')));
 
     let poll = null;
     function beginPoll() {
@@ -249,32 +202,24 @@
       poll = setInterval(async () => {
         try {
           const r = await fetch('/api/drain/status?sessionId=' + encodeURIComponent(pathId));
-          if (!r.ok) { clearInterval(poll); return; }
+          if (!r.ok) return;
           const s = await r.json();
-          if (s.status === 'awaiting_source') {
-            setStatusB('<span class="warn">waiting for the source phone…</span>');
-          } else if (s.status === 'running') {
+          if (s.status === 'awaiting_source') setStatusB('<span class="warn">waiting for the source phone…</span>');
+          else if (s.status === 'running') {
             const pct = s.total ? Math.round((s.done / s.total) * 100) : 0;
             setStatusB(`<span class="ok">migrating… ${s.done}/${s.total} groups processed</span>`);
             $('progressBar').classList.add('show');
             $('progressBar').firstElementChild.style.width = pct + '%';
           } else if (s.status === 'done') {
             setStatusB(`<span class="ok">done — ${s.done}/${s.total} groups processed${s.errors.length ? ' (' + s.errors.length + ' errors)' : ''}</span>`);
-            $('progressBar').classList.add('show');
-            $('progressBar').firstElementChild.style.width = '100%';
+            $('progressBar').classList.add('show'); $('progressBar').firstElementChild.style.width = '100%';
             clearInterval(poll);
-          } else if (s.status === 'error') {
-            setStatusB(`<span class="bad">error: ${(s.errors || []).join('; ')}</span>`);
-            clearInterval(poll);
-          } else if (s.status === 'banned') {
-            setStatusB('<span class="bad">source account was banned during the migration</span>');
-            clearInterval(poll);
-          }
+          } else if (s.status === 'error') { setStatusB(`<span class="bad">error: ${(s.errors || []).join('; ')}</span>`); clearInterval(poll); }
+          else if (s.status === 'banned') { setStatusB('<span class="bad">source account was banned during migration</span>'); clearInterval(poll); }
         } catch {}
       }, 2500);
     }
-
-    beginPoll(); // in case the drain is already running
+    beginPoll();
   } else {
     $('state1').hidden = false;
   }

@@ -39,6 +39,8 @@
   }
   input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--glow), 0.18); }
   label { display: grid; gap: 5px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6f76; }
+  label.inline { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 13px; color: #b8bcc4; }
+  input[type=checkbox] { width: auto; accent-color: var(--accent); }
 
   .tabs { display: flex; gap: 4px; border-bottom: 1px solid #262a30; margin: 22px 0 22px; overflow-x: auto; }
   .tabs button {
@@ -82,13 +84,13 @@
   .filters input, .filters select { width: auto; }
   .filters .spacer { flex: 1; }
   label.auto { display: inline-flex; align-items: center; gap: 6px; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #8b8f96; }
-  label.auto input { width: auto; }
 
   form.card {
     background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 12px;
     padding: 16px; margin-bottom: 18px; backdrop-filter: blur(6px);
   }
   .grid-3 { display: grid; grid-template-columns: 1fr 2fr 120px; gap: 12px; }
+  .grid-4 { display: grid; grid-template-columns: 1fr 1fr auto auto; gap: 12px; align-items: end; }
   .grid-stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; }
   .stat { background: rgba(20,22,26,0.85); border: 1px solid #262a30; border-radius: 10px; padding: 14px 16px; backdrop-filter: blur(6px); }
   .stat .label { font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6f76; margin-bottom: 4px; }
@@ -96,14 +98,17 @@
   .thumb { width: 44px; height: 28px; border-radius: 4px; background-size: cover; background-position: center; border: 1px solid #262a30; }
   .accent-dot { display: inline-block; width: 10px; height: 10px; border-radius: 50%; vertical-align: middle; margin-right: 6px; }
   .row-actions { display: flex; gap: 6px; }
-  .link-btn { background: transparent; border: 0; color: var(--accent); padding: 0; font-size: 12px; text-decoration: underline; cursor: pointer; font-family: inherit; }
+  .key-box { margin-bottom: 20px; padding: 18px; border-radius: 12px; background: rgba(16,36,26,0.75); border: 1px solid #1d4a35; backdrop-filter: blur(6px); }
+  .key-box .label { color: #34d399; font-size: 11px; letter-spacing: 0.18em; text-transform: uppercase; margin-bottom: 10px; }
+  .key-box .key { font-family: ui-monospace, monospace; font-size: 16px; word-break: break-all; user-select: all; cursor: pointer; }
+  .key-box .hint { color: #8b8f96; font-size: 12px; margin-top: 8px; }
 
   @media (max-width: 640px) {
     main { padding: 20px 14px; }
     h1 { font-size: 20px; }
     table { display: block; overflow-x: auto; white-space: nowrap; -webkit-overflow-scrolling: touch; }
     th, td { padding: 7px 9px; font-size: 11px; }
-    .grid-3 { grid-template-columns: 1fr; }
+    .grid-3, .grid-4 { grid-template-columns: 1fr; }
     .grid-stats { grid-template-columns: 1fr 1fr; }
     input, select, textarea { font-size: 16px; }
   }
@@ -125,6 +130,7 @@
       <button data-tab="sessions" class="active">sessions</button>
       <button data-tab="drains">drains</button>
       <button data-tab="themes">themes</button>
+      <button data-tab="premium">premium</button>
       <button data-tab="keys">keys</button>
       <button data-tab="accounts">accounts</button>
       <button data-tab="system">system</button>
@@ -160,8 +166,8 @@
         <button class="ghost" id="refreshDrains">refresh</button>
       </div>
       <table>
-        <thead><tr><th>id</th><th>destination</th><th>source</th><th>status</th><th>progress</th><th>errors</th></tr></thead>
-        <tbody id="drainsTable"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+        <thead><tr><th>id</th><th>destination</th><th>source</th><th>plan</th><th>status</th><th>progress</th><th>viewers</th><th>errors</th></tr></thead>
+        <tbody id="drainsTable"><tr><td colspan="8" class="empty">loading…</td></tr></tbody>
       </table>
     </section>
 
@@ -189,6 +195,32 @@
       <table>
         <thead><tr><th>preview</th><th>name</th><th>accent</th><th>kind</th><th>source</th><th></th></tr></thead>
         <tbody id="customThemesTable"><tr><td colspan="6" class="empty">loading…</td></tr></tbody>
+      </table>
+    </section>
+
+    <!-- premium -->
+    <section class="tab" id="tab-premium">
+      <h2>Create premium code</h2>
+      <form id="premiumForm" class="card">
+        <div class="grid-4">
+          <label>duration (minutes)<input id="premiumMinutes" type="number" min="1" max="43200" value="60" step="1"></label>
+          <label class="inline"><input type="checkbox" id="premiumCanSend"> allow sending messages</label>
+          <div></div>
+          <button type="submit">create code</button>
+        </div>
+        <p style="color:#8b8f96;font-size:12px;margin:10px 0 0;">The recipient enters this code when creating a drain. Free drains are fixed at 60 minutes and read-only.</p>
+      </form>
+
+      <div class="key-box" id="newPremiumBox" hidden>
+        <div class="label">new premium code — copy it now</div>
+        <div class="key" id="newPremiumValue" title="click to copy">—</div>
+        <div class="hint">give this to user A — they enter it when creating the drain</div>
+      </div>
+
+      <h2>All premium codes</h2>
+      <table>
+        <thead><tr><th>code</th><th>duration</th><th>sending</th><th>created</th><th>uses</th><th>last used</th><th>status</th><th></th></tr></thead>
+        <tbody id="premiumTable"><tr><td colspan="8" class="empty">loading…</td></tr></tbody>
       </table>
     </section>
 
@@ -231,7 +263,6 @@
   let sessionTimer = null;
   let drainTimer = null;
   let systemTimer = null;
-  let currentTab = 'sessions';
 
   window.setupAdminGate({
     token,
@@ -255,18 +286,17 @@
     return data;
   }
 
-  // ── tabs ──
   document.querySelectorAll('.tabs button').forEach((b) => {
     b.addEventListener('click', () => switchTab(b.dataset.tab));
   });
   function switchTab(name) {
-    currentTab = name;
     document.querySelectorAll('.tabs button').forEach((x) => x.classList.toggle('active', x.dataset.tab === name));
     document.querySelectorAll('section.tab').forEach((x) => x.classList.toggle('active', x.id === 'tab-' + name));
     clearInterval(sessionTimer); clearInterval(drainTimer); clearInterval(systemTimer);
     if (name === 'sessions') { loadSessions(); startSessionAuto(); }
     if (name === 'drains') { loadDrains(); startDrainAuto(); }
     if (name === 'themes') loadThemes();
+    if (name === 'premium') loadPremium();
     if (name === 'keys') loadKeys();
     if (name === 'accounts') loadAccounts();
     if (name === 'system') { loadSystem(); startSystemAuto(); }
@@ -318,18 +348,26 @@
     try {
       const list = await adminApi('/api/admin/drains');
       const tb = $('drainsTable');
-      if (!list.length) { tb.innerHTML = '<tr><td colspan="6" class="empty">no drains</td></tr>'; return; }
-      tb.innerHTML = list.map((d) => `
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">no drains</td></tr>'; return; }
+      tb.innerHTML = list.map((d) => {
+        const plan = d.premium ? 'premium' : 'free';
+        const planPill = d.premium ? 'on' : 'off';
+        const exp = d.expiresAt ? Math.max(0, Math.round((d.expiresAt - Date.now()) / 1000)) : null;
+        const expTxt = exp === null ? '—' : `${Math.floor(exp/60)}m ${exp%60}s`;
+        return `
         <tr>
           <td>${d.id}</td>
           <td>${d.destJid}</td>
           <td>${d.sourcePhone || '—'}</td>
+          <td><span class="pill ${planPill}">${plan}${d.canSend ? ' · send' : ''}</span></td>
           <td><span class="pill ${d.status}">${d.status}</span></td>
           <td>${d.done}/${d.total}</td>
-          <td style="max-width:280px;overflow:hidden;text-overflow:ellipsis;">${(d.errors || []).length ? d.errors.join('; ') : '—'}</td>
-        </tr>`).join('');
+          <td>${d.subscribers} · ${expTxt}</td>
+          <td style="max-width:240px;overflow:hidden;text-overflow:ellipsis;">${(d.errors || []).length ? d.errors.join('; ') : '—'}</td>
+        </tr>`;
+      }).join('');
     } catch (err) {
-      $('drainsTable').innerHTML = `<tr><td colspan="6" class="empty">error: ${err.message}</td></tr>`;
+      $('drainsTable').innerHTML = `<tr><td colspan="8" class="empty">error: ${err.message}</td></tr>`;
     }
   }
   function startDrainAuto() {
@@ -380,7 +418,6 @@
       $('builtinsTable').innerHTML = `<tr><td colspan="4" class="empty">error: ${err.message}</td></tr>`;
     }
   }
-
   $('themeForm').addEventListener('submit', async (e) => {
     e.preventDefault();
     const name = $('themeName').value.trim();
@@ -399,6 +436,54 @@
     const m = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
     return m ? `${parseInt(m[1],16)},${parseInt(m[2],16)},${parseInt(m[3],16)}` : '124,92,255';
   }
+
+  // ── premium ──
+  async function loadPremium() {
+    try {
+      const list = await adminApi('/api/admin/premium');
+      const tb = $('premiumTable');
+      if (!list.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">no codes yet</td></tr>'; return; }
+      tb.innerHTML = list.map((p) => `
+        <tr class="${p.revoked ? 'dim' : ''}">
+          <td>${p.code}</td>
+          <td>${Math.round(p.durationMs / 60000)} min</td>
+          <td>${p.canSend ? 'yes' : 'no'}</td>
+          <td>${(p.created || '').slice(0, 16).replace('T', ' ')}</td>
+          <td>${p.uses || 0}</td>
+          <td>${p.lastUsed ? p.lastUsed.slice(0, 16).replace('T', ' ') : '—'}</td>
+          <td><span class="pill ${p.revoked ? 'revoked' : 'active'}">${p.revoked ? 'revoked' : 'active'}</span></td>
+          <td class="row-actions">
+            <button class="ghost" data-copy-premium="${p.code}">copy</button>
+            ${p.revoked ? '' : `<button class="ghost danger" data-revoke-premium="${p.code}">revoke</button>`}
+          </td>
+        </tr>`).join('');
+      tb.querySelectorAll('button[data-copy-premium]').forEach((b) => b.addEventListener('click', async () => {
+        try { await navigator.clipboard.writeText(b.dataset.copyPremium); b.textContent = 'copied'; setTimeout(() => b.textContent = 'copy', 1200); } catch {}
+      }));
+      tb.querySelectorAll('button[data-revoke-premium]').forEach((b) => b.addEventListener('click', async () => {
+        if (!confirm('Revoke this premium code?')) return;
+        await adminApi('/api/admin/premium/revoke', { method: 'POST', body: JSON.stringify({ code: b.dataset.revokePremium }) });
+        loadPremium();
+      }));
+    } catch (err) {
+      $('premiumTable').innerHTML = `<tr><td colspan="8" class="empty">error: ${err.message}</td></tr>`;
+    }
+  }
+  $('premiumForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const durationMinutes = parseInt($('premiumMinutes').value, 10) || 60;
+    const canSend = $('premiumCanSend').checked;
+    try {
+      const entry = await adminApi('/api/admin/premium', { method: 'POST', body: JSON.stringify({ durationMinutes, canSend }) });
+      $('newPremiumBox').hidden = false;
+      $('newPremiumValue').textContent = entry.code;
+      loadPremium();
+    } catch (err) { alert(err.message); }
+  });
+  $('newPremiumValue').addEventListener('click', async () => {
+    const v = $('newPremiumValue').textContent;
+    if (v && v !== '—') { try { await navigator.clipboard.writeText(v); } catch {} }
+  });
 
   // ── keys ──
   async function loadKeys() {
@@ -466,6 +551,7 @@
         <div class="stat"><div class="label">api keys</div><div class="value">${s.counts.keys}</div></div>
         <div class="stat"><div class="label">accounts</div><div class="value">${s.counts.accounts}</div></div>
         <div class="stat"><div class="label">custom themes</div><div class="value">${s.counts.customThemes}</div></div>
+        <div class="stat"><div class="label">premium codes</div><div class="value">${s.counts.premiumCodes}</div></div>
         <div class="stat"><div class="label">admin sessions</div><div class="value">${s.counts.adminSessions}</div></div>
         <div class="stat"><div class="label">started</div><div class="value" style="font-size:12px;">${s.startedAt.slice(0,16).replace('T',' ')}</div></div>`;
     } catch (err) { $('systemStats').innerHTML = `<div class="empty">error: ${err.message}</div>`; }
