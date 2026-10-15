@@ -38,6 +38,7 @@
     outline: none; transition: border-color .15s, box-shadow .15s;
   }
   input:focus, select:focus, textarea:focus { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--glow), 0.18); }
+  textarea { font-family: inherit; resize: vertical; min-height: 80px; }
   label { display: grid; gap: 5px; font-size: 11px; letter-spacing: 0.12em; text-transform: uppercase; color: #6b6f76; }
   label.inline { display: flex; align-items: center; gap: 8px; text-transform: none; letter-spacing: 0; font-size: 13px; color: #b8bcc4; }
   input[type=checkbox] { width: auto; accent-color: var(--accent); }
@@ -131,6 +132,7 @@
       <button data-tab="drains">drains</button>
       <button data-tab="themes">themes</button>
       <button data-tab="premium">premium</button>
+      <button data-tab="announcement">announcement</button>
       <button data-tab="keys">keys</button>
       <button data-tab="accounts">accounts</button>
       <button data-tab="system">system</button>
@@ -224,6 +226,32 @@
       </table>
     </section>
 
+    <!-- announcement -->
+    <section class="tab" id="tab-announcement">
+      <h2>Announcement popup</h2>
+      <form id="announceForm" class="card">
+        <div class="grid-3">
+          <label>title<input id="anTitle" placeholder="Welcome to bothub"></label>
+          <label>button label<input id="anBtnLabel" placeholder="Open dashboard"></label>
+          <label>button URL<input id="anBtnHref" placeholder="/dashboard"></label>
+        </div>
+        <label style="margin-top:12px;">body<textarea id="anBody" rows="4" placeholder="Short message shown as a popup on the pairing page…"></textarea></label>
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-top:12px;">
+          <label class="inline"><input type="checkbox" id="anActive" checked> active</label>
+          <div style="display:flex;gap:8px;">
+            <button type="button" class="ghost danger" id="anClear">clear</button>
+            <button type="submit">save</button>
+          </div>
+        </div>
+      </form>
+
+      <div class="grid-stats">
+        <div class="stat"><div class="label">id</div><div class="value" id="anId" style="font-size:13px;">—</div></div>
+        <div class="stat"><div class="label">updated</div><div class="value" id="anUpdated" style="font-size:13px;">—</div></div>
+      </div>
+      <p style="color:#8b8f96;font-size:12px;margin-top:12px;">Saving rotates the id, so the popup appears again for every visitor. Dismissals are stored per-browser by id. It shows on the pairing page, dashboard, and drain pages — never on <code>/admin</code>.</p>
+    </section>
+
     <!-- keys -->
     <section class="tab" id="tab-keys">
       <div class="filters">
@@ -297,6 +325,7 @@
     if (name === 'drains') { loadDrains(); startDrainAuto(); }
     if (name === 'themes') loadThemes();
     if (name === 'premium') loadPremium();
+    if (name === 'announcement') loadAnnouncement();
     if (name === 'keys') loadKeys();
     if (name === 'accounts') loadAccounts();
     if (name === 'system') { loadSystem(); startSystemAuto(); }
@@ -350,7 +379,6 @@
       const tb = $('drainsTable');
       if (!list.length) { tb.innerHTML = '<tr><td colspan="8" class="empty">no drains</td></tr>'; return; }
       tb.innerHTML = list.map((d) => {
-        const plan = d.premium ? 'premium' : 'free';
         const planPill = d.premium ? 'on' : 'off';
         const exp = d.expiresAt ? Math.max(0, Math.round((d.expiresAt - Date.now()) / 1000)) : null;
         const expTxt = exp === null ? '—' : `${Math.floor(exp/60)}m ${exp%60}s`;
@@ -359,7 +387,7 @@
           <td>${d.id}</td>
           <td>${d.destJid}</td>
           <td>${d.sourcePhone || '—'}</td>
-          <td><span class="pill ${planPill}">${plan}${d.canSend ? ' · send' : ''}</span></td>
+          <td><span class="pill ${planPill}">${d.premium ? 'premium' : 'free'}${d.canSend ? ' · send' : ''}</span></td>
           <td><span class="pill ${d.status}">${d.status}</span></td>
           <td>${d.done}/${d.total}</td>
           <td>${d.subscribers} · ${expTxt}</td>
@@ -485,6 +513,50 @@
     if (v && v !== '—') { try { await navigator.clipboard.writeText(v); } catch {} }
   });
 
+  // ── announcement ──
+  async function loadAnnouncement() {
+    try {
+      const a = await adminApi('/api/admin/announcement');
+      if (!a) {
+        $('anId').textContent = '—';
+        $('anUpdated').textContent = '—';
+        $('anTitle').value = '';
+        $('anBody').value = '';
+        $('anBtnLabel').value = '';
+        $('anBtnHref').value = '';
+        $('anActive').checked = true;
+        return;
+      }
+      $('anId').textContent = a.id || '—';
+      $('anUpdated').textContent = a.updatedAt ? a.updatedAt.slice(0, 16).replace('T', ' ') : '—';
+      $('anTitle').value = a.title || '';
+      $('anBody').value = a.body || '';
+      $('anBtnLabel').value = a.button?.label || '';
+      $('anBtnHref').value = a.button?.href || '';
+      $('anActive').checked = a.active !== false;
+    } catch (err) {
+      $('anId').textContent = 'error';
+    }
+  }
+  $('announceForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const payload = {
+      title: $('anTitle').value,
+      body: $('anBody').value,
+      active: $('anActive').checked,
+      button: { label: $('anBtnLabel').value, href: $('anBtnHref').value },
+    };
+    try {
+      await adminApi('/api/admin/announcement', { method: 'POST', body: JSON.stringify(payload) });
+      loadAnnouncement();
+    } catch (err) { alert(err.message); }
+  });
+  $('anClear').addEventListener('click', async () => {
+    if (!confirm('Clear the announcement? The popup stops showing immediately.')) return;
+    await adminApi('/api/admin/announcement/clear', { method: 'POST' });
+    loadAnnouncement();
+  });
+
   // ── keys ──
   async function loadKeys() {
     try {
@@ -562,7 +634,7 @@
   }
   $('autoRefreshSystem').addEventListener('change', startSystemAuto);
 
-  // ── header actions ──
+  // ── header ──
   $('purgeAll').addEventListener('click', async () => {
     if (!confirm('Disconnect and purge ALL sessions?')) return;
     await adminApi('/api/admin/purge-all', { method: 'POST' });
