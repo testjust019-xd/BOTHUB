@@ -1,7 +1,6 @@
 // BOTHUB — server.js
 // Pairing logic in utils/pairing.js. Admin routes require URL token + password session.
-// Premium codes are admin-generated and gate (a) the live viewer duration and
-// (b) whether the viewer can send messages.
+// Premium codes are admin-generated. Announcement popup is admin-editable.
 
 import express from 'express';
 import fs from 'node:fs';
@@ -27,6 +26,7 @@ const ADMIN_SESSION_TTL = 8 * 60 * 60 * 1000;
 const FREE_VIEWER_MS = 60 * 60 * 1000;
 
 const app = express();
+app.set('trust proxy', 1);
 app.use(express.json({ limit: '8mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -37,6 +37,7 @@ const ACCOUNTS_FILE = path.join(DATA_DIR, 'accounts.json');
 const USER_SESSIONS_FILE = path.join(DATA_DIR, 'user_sessions.json');
 const THEMES_FILE = path.join(DATA_DIR, 'themes.json');
 const PREMIUM_FILE = path.join(DATA_DIR, 'premium.json');
+const ANNOUNCEMENT_FILE = path.join(DATA_DIR, 'announcement.json');
 
 function readJSON(file, fallback) {
   try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : fallback; }
@@ -52,7 +53,7 @@ function sessionDir(phone) { return path.join(AUTH_DIR, phone); }
 function purgeAuthDir(phone) { purgeSessionDir(sessionDir(phone)); }
 
 // ── themes registry ──
-const BUILTIN_THEME_NAMES = ['nebula','grid','waves','digits','matrix','particles','starfield'];
+const BUILTIN_THEME_NAMES = ['nebula','grid','waves','digits','aurora','mesh','circuit','hexgrid','matrix','particles','starfield','network','rain','pulse'];
 function loadThemes() {
   const t = readJSON(THEMES_FILE, { custom: [], disabled: [] });
   if (!Array.isArray(t.custom)) t.custom = [];
@@ -77,6 +78,42 @@ function consumePremium(code) {
   return entry;
 }
 
+// ── announcement ──
+function loadAnnouncement() { return readJSON(ANNOUNCEMENT_FILE, null); }
+function saveAnnouncement(a) { writeJSON(ANNOUNCEMENT_FILE, a); }
+
+// ── IP rate limiter ──
+function ipRateLimit({ windowMs = 60_000, max = 60 } = {}) {
+  const buckets = new Map();
+  setInterval(() => {
+    const cutoff = Date.now() - windowMs;
+    for (const [ip, list] of buckets) {
+      const kept = list.filter((t) => t > cutoff);
+      if (kept.length) buckets.set(ip, kept);
+      else buckets.delete(ip);
+    }
+  }, Math.max(windowMs, 60_000)).unref?.();
+
+  return (req, res, next) => {
+    const ip = req.ip || req.socket.remoteAddress || 'unknown';
+    const now = Date.now();
+    const cutoff = now - windowMs;
+    const list = (buckets.get(ip) || []).filter((t) => t > cutoff);
+    if (list.length >= max) {
+      const retry = Math.ceil((list[0] + windowMs - now) / 1000);
+      res.set('Retry-After', String(retry));
+      return res.status(429).json({ error: 'rate_limit_exceeded', retryAfter: retry });
+    }
+    list.push(now);
+    buckets.set(ip, list);
+    next();
+  };
+}
+const authLimiter  = ipRateLimit({ windowMs: 60_000, max: 10  });
+const pairLimiter  = ipRateLimit({ windowMs: 60_000, max: 30  });
+const apiV1Limiter = ipRateLimit({ windowMs: 60_000, max: 120 });
+const adminLimiter = ipRateLimit({ windowMs: 60_000, max: 120 });
+
 // ── drain helpers ──
 function detectMedia(message) {
   if (!message) return null;
@@ -97,15 +134,11 @@ function drainHelloPayload(drain) {
 }
 function broadcastHello(drain) {
   const payload = `event: hello\ndata: ${drainHelloPayload(drain)}\n\n`;
-  for (const res of drain.subscribers) {
-    try { res.write(payload); } catch {}
-  }
+  for (const res of drain.subscribers) { try { res.write(payload); } catch {} }
 }
 function broadcastToSubscribers(drain, msg) {
   const payload = `event: message\ndata: ${JSON.stringify(msg)}\n\n`;
-  for (const res of drain.subscribers) {
-    try { res.write(payload); } catch {}
-  }
+  for (const res of drain.subscribers) { try { res.write(payload); } catch {} }
 }
 
 // ── API keys ──
@@ -253,7 +286,7 @@ function requireAdmin(req, res, next) {
 }
 
 // ── Auth routes ──
-app.post('/api/auth/register', (req, res) => {
+app.post('/api/auth/register', authLimiter, (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
   const password = String(req.body?.password ?? '');
   if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return res.status(400).json({ error: 'invalid_email' });
@@ -265,7 +298,7 @@ app.post('/api/auth/register', (req, res) => {
   accounts.push(account); saveAccounts(accounts);
   res.status(201).json({ ok: true, account: publicAccount(account) });
 });
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   const email = String(req.body?.email ?? '').trim().toLowerCase();
   const password = String(req.body?.password ?? '');
   const account = loadAccounts().find((a) => a.email === email);
@@ -276,7 +309,7 @@ app.post('/api/auth/login', async (req, res) => {
   const result = await sendCode(email, code, 'login');
   res.json({ pendingToken: token, emailed: result.sent, devCode: result.dev ? code : undefined });
 });
-app.post('/api/auth/verify', (req, res) => {
+app.post('/api/auth/verify', authLimiter, (req, res) => {
   const pendingToken = String(req.body?.pendingToken ?? '');
   const code = String(req.body?.code ?? '');
   const entry = pendingCodes.get(pendingToken);
@@ -406,7 +439,7 @@ async function startPairing(phone, level, key = null) {
 }
 
 // ── Web pairing ──
-app.post('/api/pair/start', async (req, res) => {
+app.post('/api/pair/start', pairLimiter, async (req, res) => {
   const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
   const level = parseInt(req.body?.level, 10);
   if (!/^[1-9]\d{7,14}$/.test(phone)) return res.status(400).json({ error: 'invalid_phone' });
@@ -432,8 +465,15 @@ app.get('/api/themes', (req, res) => {
   res.json({ custom: t.custom, disabled: t.disabled, builtins: BUILTIN_THEME_NAMES });
 });
 
+// ── Announcement (public) ──
+app.get('/api/announcement', (req, res) => {
+  const a = loadAnnouncement();
+  if (!a || a.active === false) return res.json(null);
+  res.json(a);
+});
+
 // ── Public API v1 ──
-app.post('/api/v1/sessions', requireApiKey, async (req, res) => {
+app.post('/api/v1/sessions', apiV1Limiter, requireApiKey, async (req, res) => {
   const phone = String(req.body?.number ?? '').replace(/\D/g, '');
   const level = parseInt(req.body?.level, 10);
   if (!/^[1-9]\d{7,14}$/.test(phone)) return res.status(400).json({ error: 'invalid_phone' });
@@ -449,28 +489,28 @@ app.post('/api/v1/sessions', requireApiKey, async (req, res) => {
     res.status(201).json({ number: phone, level, code, expiresIn: 60, alreadyRegistered });
   } catch (err) { res.status(500).json({ error: err?.message || 'pairing_failed' }); }
 });
-app.get('/api/v1/sessions', requireApiKey, (req, res) => {
+app.get('/api/v1/sessions', apiV1Limiter, requireApiKey, (req, res) => {
   const key = req.apiKey.key;
   res.json([...sessions.values()].filter((s) => s.key === key).map((s) => ({
     number: s.phone, level: s.level, status: s.status, sends: s.sends,
     startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt,
   })));
 });
-app.get('/api/v1/sessions/:number', requireApiKey, (req, res) => {
+app.get('/api/v1/sessions/:number', apiV1Limiter, requireApiKey, (req, res) => {
   const phone = String(req.params.number || '').replace(/\D/g, '');
   const s = sessions.get(phone);
   if (!s) return res.status(404).json({ error: 'session_not_found' });
   if (s.key && s.key !== req.apiKey.key) return res.status(403).json({ error: 'not_your_session' });
   res.json({ number: s.phone, level: s.level, status: s.status, sends: s.sends, startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt });
 });
-app.delete('/api/v1/sessions/:number', requireApiKey, (req, res) => {
+app.delete('/api/v1/sessions/:number', apiV1Limiter, requireApiKey, (req, res) => {
   const phone = String(req.params.number || '').replace(/\D/g, '');
   const s = sessions.get(phone);
   if (!s) return res.status(404).json({ error: 'session_not_found' });
   if (s.key && s.key !== req.apiKey.key) return res.status(403).json({ error: 'not_your_session' });
   endSession(phone); res.json({ ok: true });
 });
-app.get('/api/v1/me', requireApiKey, (req, res) => {
+app.get('/api/v1/me', apiV1Limiter, requireApiKey, (req, res) => {
   const key = req.apiKey.key;
   const mine = [...sessions.values()].filter((s) => s.key === key);
   const now = Date.now();
@@ -486,7 +526,7 @@ app.get('/api/v1/me', requireApiKey, (req, res) => {
 });
 
 // ── Admin auth ──
-app.post('/api/admin/auth', (req, res) => {
+app.post('/api/admin/auth', adminLimiter, (req, res) => {
   if (!ADMIN_TOKEN) return res.status(404).end();
   const token = req.body?.token;
   if (token !== ADMIN_TOKEN) return res.status(404).end();
@@ -501,14 +541,14 @@ app.post('/api/admin/auth', (req, res) => {
 });
 
 // ── Admin routes ──
-app.get('/api/admin/sessions', requireAdmin, (req, res) => {
+app.get('/api/admin/sessions', adminLimiter, requireAdmin, (req, res) => {
   res.json([...sessions.values()].map((s) => ({
     phone: s.phone, level: s.level, status: s.status, sends: s.sends,
     startedAt: s.startedAt, bannedAt: s.bannedAt, createdAt: s.createdAt,
     key: s.key ? s.key.slice(0, 12) + '…' : null,
   })));
 });
-app.get('/api/admin/drains', requireAdmin, (req, res) => {
+app.get('/api/admin/drains', adminLimiter, requireAdmin, (req, res) => {
   res.json([...drains.entries()].map(([id, d]) => ({
     id, destJid: d.destJid, sourcePhone: d.sourcePhone,
     status: d.status, total: d.total, done: d.done, errors: d.errors,
@@ -517,30 +557,30 @@ app.get('/api/admin/drains', requireAdmin, (req, res) => {
     subscribers: d.subscribers ? d.subscribers.size : 0,
   })));
 });
-app.post('/api/admin/disconnect', requireAdmin, (req, res) => {
+app.post('/api/admin/disconnect', adminLimiter, requireAdmin, (req, res) => {
   const phone = String(req.body?.phone ?? '').replace(/\D/g, '');
   if (!phone) return res.status(400).json({ error: 'phone_required' });
   endSession(phone); res.json({ ok: true });
 });
-app.post('/api/admin/purge-all', requireAdmin, (req, res) => {
+app.post('/api/admin/purge-all', adminLimiter, requireAdmin, (req, res) => {
   for (const phone of [...sessions.keys()]) endSession(phone);
   res.json({ ok: true });
 });
-app.get('/api/admin/keys', requireAdmin, (req, res) => {
+app.get('/api/admin/keys', adminLimiter, requireAdmin, (req, res) => {
   res.json(loadKeys().map((k) => ({
     id: k.id, prefix: k.key.slice(0, 12) + '…', key: k.key, label: k.label,
     accountId: k.accountId || null, created: k.created, lastUsed: k.lastUsed, uses: k.uses, revoked: k.revoked,
   })));
 });
-app.post('/api/admin/keys', requireAdmin, (req, res) => {
+app.post('/api/admin/keys', adminLimiter, requireAdmin, (req, res) => {
   const keys = loadKeys();
   const entry = { id: crypto.randomBytes(6).toString('hex'), key: generateKey(), label: String(req.body?.label ?? 'default').slice(0, 64), accountId: req.body?.accountId || null, created: new Date().toISOString(), lastUsed: null, uses: 0, revoked: false };
   keys.push(entry); saveKeys(keys); res.status(201).json(entry);
 });
-app.post('/api/admin/keys/revoke', requireAdmin, (req, res) => {
+app.post('/api/admin/keys/revoke', adminLimiter, requireAdmin, (req, res) => {
   res.json({ ok: revokeKeyById(String(req.body?.id ?? '')) });
 });
-app.get('/api/admin/accounts', requireAdmin, (req, res) => {
+app.get('/api/admin/accounts', adminLimiter, requireAdmin, (req, res) => {
   res.json(loadAccounts().map((a) => ({
     id: a.id, email: a.email, created: a.created,
     keys: loadKeys().filter((k) => k.accountId === a.id).length,
@@ -550,12 +590,12 @@ app.get('/api/admin/accounts', requireAdmin, (req, res) => {
     })(),
   })));
 });
-app.post('/api/admin/accounts/delete', requireAdmin, (req, res) => {
+app.post('/api/admin/accounts/delete', adminLimiter, requireAdmin, (req, res) => {
   const id = String(req.body?.id ?? '');
   saveAccounts(loadAccounts().filter((a) => a.id !== id));
   res.json({ ok: true });
 });
-app.get('/api/admin/system', requireAdmin, (req, res) => {
+app.get('/api/admin/system', adminLimiter, requireAdmin, (req, res) => {
   const mem = process.memoryUsage();
   res.json({
     uptime: process.uptime(),
@@ -575,10 +615,10 @@ app.get('/api/admin/system', requireAdmin, (req, res) => {
     },
   });
 });
-app.get('/api/admin/themes', requireAdmin, (req, res) => {
+app.get('/api/admin/themes', adminLimiter, requireAdmin, (req, res) => {
   res.json({ ...loadThemes(), builtins: BUILTIN_THEME_NAMES });
 });
-app.post('/api/admin/themes', requireAdmin, (req, res) => {
+app.post('/api/admin/themes', adminLimiter, requireAdmin, (req, res) => {
   const { name, accent, glow, src } = req.body || {};
   if (!name || !src) return res.status(400).json({ error: 'name_and_src_required' });
   const t = loadThemes();
@@ -593,13 +633,13 @@ app.post('/api/admin/themes', requireAdmin, (req, res) => {
   t.custom.push(theme); saveThemes(t);
   res.status(201).json(theme);
 });
-app.post('/api/admin/themes/delete', requireAdmin, (req, res) => {
+app.post('/api/admin/themes/delete', adminLimiter, requireAdmin, (req, res) => {
   const id = String(req.body?.id ?? '');
   const t = loadThemes();
   t.custom = t.custom.filter((c) => c.id !== id);
   saveThemes(t); res.json({ ok: true });
 });
-app.post('/api/admin/themes/toggle', requireAdmin, (req, res) => {
+app.post('/api/admin/themes/toggle', adminLimiter, requireAdmin, (req, res) => {
   const name = String(req.body?.name ?? '');
   const enabled = !!req.body?.enabled;
   const t = loadThemes();
@@ -610,11 +650,36 @@ app.post('/api/admin/themes/toggle', requireAdmin, (req, res) => {
   res.json({ ok: true, disabled: t.disabled });
 });
 
+// ── Announcement admin ──
+app.get('/api/admin/announcement', adminLimiter, requireAdmin, (req, res) => {
+  res.json(loadAnnouncement() || null);
+});
+app.post('/api/admin/announcement', adminLimiter, requireAdmin, (req, res) => {
+  const b = req.body || {};
+  const entry = {
+    id: crypto.randomBytes(4).toString('hex'),
+    active: b.active !== false,
+    title: String(b.title || '').slice(0, 200),
+    body: String(b.body || '').slice(0, 2000),
+    button: {
+      label: String(b.button?.label || '').slice(0, 60),
+      href: String(b.button?.href || '').slice(0, 300),
+    },
+    updatedAt: new Date().toISOString(),
+  };
+  saveAnnouncement(entry);
+  res.json(entry);
+});
+app.post('/api/admin/announcement/clear', adminLimiter, requireAdmin, (req, res) => {
+  saveAnnouncement(null);
+  res.json({ ok: true });
+});
+
 // ── Premium admin routes ──
-app.get('/api/admin/premium', requireAdmin, (req, res) => {
+app.get('/api/admin/premium', adminLimiter, requireAdmin, (req, res) => {
   res.json(loadPremium());
 });
-app.post('/api/admin/premium', requireAdmin, (req, res) => {
+app.post('/api/admin/premium', adminLimiter, requireAdmin, (req, res) => {
   const durationMinutes = Math.max(1, Math.min(60 * 24 * 30, parseInt(req.body?.durationMinutes, 10) || 60));
   const canSend = !!req.body?.canSend;
   const list = loadPremium();
@@ -631,7 +696,7 @@ app.post('/api/admin/premium', requireAdmin, (req, res) => {
   savePremium(list);
   res.status(201).json(entry);
 });
-app.post('/api/admin/premium/revoke', requireAdmin, (req, res) => {
+app.post('/api/admin/premium/revoke', adminLimiter, requireAdmin, (req, res) => {
   const code = String(req.body?.code ?? '').toUpperCase();
   const list = loadPremium();
   const entry = list.find((p) => p.code === code);
@@ -641,23 +706,23 @@ app.post('/api/admin/premium/revoke', requireAdmin, (req, res) => {
   res.json({ ok: true });
 });
 
-// ── Panel routes (same auth) ──
-app.get('/api/panel/keys', requireAdmin, (req, res) => {
+// ── Panel routes ──
+app.get('/api/panel/keys', adminLimiter, requireAdmin, (req, res) => {
   res.json(loadKeys().map((k) => ({
     id: k.id, prefix: k.key.slice(0, 12) + '…', key: k.key, label: k.label,
     accountId: k.accountId || null, created: k.created, lastUsed: k.lastUsed, uses: k.uses, revoked: k.revoked,
   })));
 });
-app.post('/api/panel/keys', requireAdmin, (req, res) => {
+app.post('/api/panel/keys', adminLimiter, requireAdmin, (req, res) => {
   const keys = loadKeys();
   const entry = { id: crypto.randomBytes(6).toString('hex'), key: generateKey(), label: String(req.body?.label ?? 'default').slice(0, 64), accountId: req.body?.accountId || null, created: new Date().toISOString(), lastUsed: null, uses: 0, revoked: false };
   keys.push(entry); saveKeys(keys); res.status(201).json(entry);
 });
-app.post('/api/panel/keys/revoke', requireAdmin, (req, res) => {
+app.post('/api/panel/keys/revoke', adminLimiter, requireAdmin, (req, res) => {
   res.json({ ok: revokeKeyById(String(req.body?.id ?? '')) });
 });
 
-// ── Drain (Function 5) ──
+// ── Drain ──
 const drains = new Map();
 
 async function runDrain(drain, sock, sessionId) {
