@@ -1,4 +1,4 @@
-// public/theme.js — themes + music + cursor + settings. Generated backgrounds only.
+// public/theme.js — themes + music + cursor + settings + announcement popup.
 //   <script src="/theme.js" data-scope="pairing"></script>
 //   <script src="/theme.js" data-scope="dashboard"></script>
 //   <script src="/theme.js" data-scope="admin"></script>
@@ -81,10 +81,7 @@
     function resize() {
       w = canvas.width = window.innerWidth;
       h = canvas.height = window.innerHeight;
-      nodes = Array.from({ length: 60 }, () => ({
-        x: Math.random() * w, y: Math.random() * h,
-        vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4,
-      }));
+      nodes = Array.from({ length: 60 }, () => ({ x: Math.random() * w, y: Math.random() * h, vx: (Math.random() - 0.5) * 0.4, vy: (Math.random() - 0.5) * 0.4 }));
     }
     resize(); window.addEventListener('resize', resize);
     function frame() {
@@ -101,10 +98,7 @@
           const d2 = dx * dx + dy * dy;
           if (d2 < 140 * 140) {
             ctx.globalAlpha = 1 - d2 / (140 * 140);
-            ctx.beginPath();
-            ctx.moveTo(nodes[i].x, nodes[i].y);
-            ctx.lineTo(nodes[j].x, nodes[j].y);
-            ctx.stroke();
+            ctx.beginPath(); ctx.moveTo(nodes[i].x, nodes[i].y); ctx.lineTo(nodes[j].x, nodes[j].y); ctx.stroke();
           }
         }
       }
@@ -120,10 +114,7 @@
     function resize() {
       w = canvas.width = window.innerWidth;
       h = canvas.height = window.innerHeight;
-      drops = Array.from({ length: 140 }, () => ({
-        x: Math.random() * w, y: Math.random() * h,
-        len: Math.random() * 20 + 10, v: Math.random() * 3 + 3,
-      }));
+      drops = Array.from({ length: 140 }, () => ({ x: Math.random() * w, y: Math.random() * h, len: Math.random() * 20 + 10, v: Math.random() * 3 + 3 }));
     }
     resize(); window.addEventListener('resize', resize);
     function frame() {
@@ -132,10 +123,7 @@
       ctx.strokeStyle = accent; ctx.lineWidth = 1;
       for (const d of drops) {
         ctx.globalAlpha = 0.35 + Math.random() * 0.4;
-        ctx.beginPath();
-        ctx.moveTo(d.x, d.y);
-        ctx.lineTo(d.x, d.y + d.len);
-        ctx.stroke();
+        ctx.beginPath(); ctx.moveTo(d.x, d.y); ctx.lineTo(d.x, d.y + d.len); ctx.stroke();
         d.y += d.v;
         if (d.y > h) { d.y = -d.len; d.x = Math.random() * w; }
       }
@@ -334,6 +322,69 @@
     #bh-panel .reset:hover { color: #f87171; border-color: #f87171; }
     body { background: #06070a; }
 
+    /* ── announcement popup ── */
+    #bh-announce {
+      position: fixed; inset: 0; z-index: 100000;
+      background: rgba(4,5,8,0.65);
+      backdrop-filter: blur(6px);
+      display: flex; align-items: center; justify-content: center;
+      padding: 24px;
+      opacity: 0; transition: opacity .25s ease;
+      font: 14px/1.55 ui-sans-serif, system-ui, -apple-system, sans-serif;
+      color: #e7e7ea;
+    }
+    #bh-announce.bh-announce-visible { opacity: 1; }
+    #bh-announce.bh-announce-closing { opacity: 0; }
+
+    .bh-announce-card {
+      position: relative;
+      width: 100%; max-width: 420px;
+      background: rgba(20,22,26,0.97);
+      border: 1px solid rgba(var(--glow), 0.4);
+      border-radius: 16px;
+      padding: 28px 24px 24px;
+      box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 40px rgba(var(--glow), 0.25);
+      transform: translateY(12px) scale(0.97);
+      transition: transform .35s cubic-bezier(.2,.9,.3,1.2);
+      animation: bh-announce-glow 3s ease-in-out infinite alternate;
+    }
+    #bh-announce.bh-announce-visible .bh-announce-card { transform: translateY(0) scale(1); }
+    @keyframes bh-announce-glow {
+      0%   { box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 40px rgba(var(--glow), 0.2); }
+      100% { box-shadow: 0 30px 80px rgba(0,0,0,0.7), 0 0 60px rgba(var(--glow), 0.45); }
+    }
+
+    .bh-announce-close {
+      position: absolute; top: 10px; right: 10px;
+      width: 30px; height: 30px; border-radius: 50%;
+      background: rgba(255,255,255,0.06);
+      border: 1px solid rgba(255,255,255,0.1);
+      color: #8b8f96; font-size: 18px; line-height: 1;
+      cursor: pointer;
+      transition: color .15s, background .15s, transform .1s;
+      padding: 0;
+    }
+    .bh-announce-close:hover { color: #e7e7ea; background: rgba(255,255,255,0.1); }
+    .bh-announce-close:active { transform: scale(0.94); }
+
+    .bh-announce-title { margin: 0 0 10px; font-size: 20px; font-weight: 600; letter-spacing: -0.01em; color: var(--accent); }
+    .bh-announce-text { color: #b8bcc4; font-size: 14px; margin-bottom: 18px; white-space: pre-wrap; }
+    .bh-announce-btn {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: var(--accent); color: white;
+      padding: 10px 16px; border-radius: 8px;
+      font-size: 14px; font-weight: 600; text-decoration: none;
+      transition: filter .15s, transform .05s, box-shadow .2s;
+      box-shadow: 0 8px 24px -10px rgba(var(--glow), 0.7);
+      animation: bh-announce-pulse 2s ease-in-out infinite;
+    }
+    .bh-announce-btn:hover { filter: brightness(1.1); text-decoration: none; }
+    .bh-announce-btn:active { transform: scale(0.98); }
+    @keyframes bh-announce-pulse {
+      0%, 100% { box-shadow: 0 8px 24px -10px rgba(var(--glow), 0.7); }
+      50%      { box-shadow: 0 8px 24px -10px rgba(var(--glow), 0.7), 0 0 0 6px rgba(var(--glow), 0.15); }
+    }
+
     @media (max-width: 900px) { th, td { padding: 7px 9px; } #bh-panel { width: 340px; } }
     @media (max-width: 640px) {
       body { padding: 16px; }
@@ -354,12 +405,15 @@
       #bh-music-btn, #bh-settings-btn { padding: 5px 8px; font-size: 13px; }
       #bh-panel { right: 8px; left: 8px; width: auto; bottom: max(48px, calc(env(safe-area-inset-bottom) + 48px)); max-height: calc(100vh - 80px); padding: 12px; }
       #bh-grid { grid-template-columns: repeat(3, 1fr); }
+      .bh-announce-card { padding: 22px 18px 18px; }
+      .bh-announce-title { font-size: 18px; }
     }
     @media (min-width: 1440px) { #bh-panel { width: 400px; } }
     @media (prefers-reduced-motion: reduce) {
       #bh-music-btn .disc { animation: none; }
       #bh-bg { transition: none; }
       #bh-panel, #bh-theme-chip, #bh-music-btn, #bh-settings-btn, #bh-dot { transition: none; }
+      #bh-announce, .bh-announce-card, .bh-announce-btn { transition: none; animation: none; }
     }
   `;
   document.head.appendChild(style);
@@ -689,8 +743,60 @@
   }
   chip.addEventListener('click', () => { if (timer) clearTimeout(timer); advance(); });
 
+  // ── announcement popup ──
+  function escapeHtml(s) {
+    return String(s).replace(/[<>&"']/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;', "'": '&#39;' }[c]));
+  }
+
+  function showAnnouncement(a) {
+    const wrap = document.createElement('div');
+    wrap.id = 'bh-announce';
+    wrap.innerHTML = `
+      <div class="bh-announce-card" role="dialog" aria-modal="true">
+        <button class="bh-announce-close" aria-label="close" type="button">×</button>
+        <div class="bh-announce-body">
+          ${a.title ? `<h2 class="bh-announce-title">${escapeHtml(a.title)}</h2>` : ''}
+          ${a.body ? `<div class="bh-announce-text">${escapeHtml(a.body)}</div>` : ''}
+          ${a.button && a.button.label && a.button.href
+            ? `<a class="bh-announce-btn" href="${escapeHtml(a.button.href)}">${escapeHtml(a.button.label)}</a>`
+            : ''}
+        </div>
+      </div>`;
+
+    let closed = false;
+    const close = () => {
+      if (closed) return;
+      closed = true;
+      wrap.classList.add('bh-announce-closing');
+      setTimeout(() => wrap.remove(), 260);
+      try { localStorage.setItem('bothub.announcement_dismissed:' + a.id, '1'); } catch {}
+    };
+
+    wrap.querySelector('.bh-announce-close').addEventListener('click', close);
+    wrap.addEventListener('click', (e) => { if (e.target === wrap) close(); });
+    document.addEventListener('keydown', function onEsc(e) {
+      if (e.key === 'Escape') { close(); document.removeEventListener('keydown', onEsc); }
+    });
+
+    document.body.appendChild(wrap);
+    requestAnimationFrame(() => wrap.classList.add('bh-announce-visible'));
+  }
+
+  async function loadAnnouncement() {
+    if (SCOPE === 'admin') return;
+    try {
+      const r = await fetch('/api/announcement');
+      if (!r.ok) return;
+      const a = await r.json();
+      if (!a || !a.id || a.active === false) return;
+      if (localStorage.getItem('bothub.announcement_dismissed:' + a.id) === '1') return;
+      showAnnouncement(a);
+    } catch {}
+  }
+
   applyByName(settings.themeKey);
   scheduleRotate();
+  loadAnnouncement();
 
   window.bothubMarkSession = function () { localStorage.setItem('bothub.has_session', '1'); };
 })();
