@@ -160,24 +160,63 @@ function gen6() { return String(crypto.randomInt(0, 1000000)).padStart(6, '0'); 
 
 async function sendCode(email, code, purpose) {
   const subject = purpose === 'login' ? 'Your bothub login code' : 'Verify your bothub account';
-  const text = `Your code is: ${code}\n\nIt expires in 10 minutes.`;
-  if (!RESEND_API_KEY) {
-    console.log(`[email:${purpose}] to=${email} code=${code} (no RESEND_API_KEY)`);
-    return { sent: false, dev: true };
+  const text = `Your code is: ${code}\n\nIt expires in 10 minutes.\n\nIf you didn't request this, ignore this email.`;
+
+  if (process.env.BREVO_API_KEY) {
+    try {
+      const fromRaw = process.env.MAIL_FROM || 'bothub <no-reply@example.com>';
+      const m = fromRaw.match(/^(.*?)\s*<\s*(.+?)\s*>$/);
+      const senderName = m ? m[1].trim() : 'bothub';
+      const senderEmail = m ? m[2] : fromRaw;
+      const r = await fetch('https://api.brevo.com/v3/smtp/email', {
+        method: 'POST',
+        headers: {
+          'api-key': process.env.BREVO_API_KEY,
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: JSON.stringify({
+          sender: { name: senderName, email: senderEmail },
+          to: [{ email }],
+          subject,
+          textContent: text,
+        }),
+      });
+      if (!r.ok) throw new Error(`brevo ${r.status}: ${await r.text()}`);
+      console.log(`[email:brevo] to=${email} sent`);
+      return { sent: true, provider: 'brevo' };
+    } catch (err) {
+      console.warn(`[email] brevo failed for ${email}:`, err?.message || err);
+      console.log(`[email:fallback] to=${email} code=${code}`);
+      return { sent: false, error: err?.message, provider: 'brevo' };
+    }
   }
-  try {
-    const r = await fetch('https://api.resend.com/emails', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${RESEND_API_KEY}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({ from: MAIL_FROM, to: [email], subject, text }),
-    });
-    if (!r.ok) throw new Error(`resend ${r.status}`);
-    return { sent: true };
-  } catch (err) {
-    console.warn(`[email] failed for ${email}:`, err?.message || err);
-    console.log(`[email:fallback] to=${email} code=${code}`);
-    return { sent: false, error: err?.message };
+
+  if (process.env.RESEND_API_KEY) {
+    try {
+      const r = await fetch('https://api.resend.com/emails', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${process.env.RESEND_API_KEY}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          from: process.env.MAIL_FROM || 'bothub <onboarding@resend.dev>',
+          to: [email], subject, text,
+        }),
+      });
+      if (!r.ok) throw new Error(`resend ${r.status}: ${await r.text()}`);
+      console.log(`[email:resend] to=${email} sent`);
+      return { sent: true, provider: 'resend' };
+    } catch (err) {
+      console.warn(`[email] resend failed for ${email}:`, err?.message || err);
+      console.log(`[email:fallback] to=${email} code=${code}`);
+      return { sent: false, error: err?.message, provider: 'resend' };
+    }
   }
+
+  console.log(`[email:console] to=${email} code=${code} (no provider configured)`);
+  return { sent: false, dev: true };
 }
 
 function requireUser(req, res, next) {
